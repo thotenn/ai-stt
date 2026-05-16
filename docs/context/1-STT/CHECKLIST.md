@@ -118,21 +118,27 @@ Host: Hetzner CAX31, 8 vCPUs / 16 GB RAM, Ubuntu 24.04, aarch64. Full analysis: 
 
 ---
 
-## Phase 2 — Decoder for non-WAV inputs
+## Phase 2 — Decoder for non-WAV inputs ✅
 
-- [ ] Add `ffmpeg` dependency (system binary, not pip).
-- [ ] `audio.decode_to_pcm` shells out to `ffmpeg -i <tempin> -ac 1 -ar 16000 -f wav -acodec pcm_s16le <tempout>` for non-WAV MIMEs.
-- [ ] argv array, no shell string. Validate `ffmpeg` resolved via `shutil.which('ffmpeg')` once at import.
-- [ ] Add `tests/fixtures/short_es.webm` (Opus) and `short_es.ogg` and `short_es.mp3`.
-- [ ] `tests/test_audio.py`:
-  - [ ] Decode each fixture, assert output WAV is 16 kHz / 16-bit / mono.
-  - [ ] Decode of corrupt input raises `SttError`, no crash.
-- [ ] `tests/test_transcribe_endpoint.py`:
-  - [ ] 200 on `audio/webm` upload returns same text (approximately) as the WAV fixture.
+- [x] `ffmpeg` is a system binary dep (apt in Docker image; local installs document `STT_FFMPEG_BIN` override). No pip dep added.
+- [x] `audio.decode_to_pcm`:
+  - Fast-path WAV pass-through (sniff `RIFF...WAVE` + MIME).
+  - Non-WAV → shell out to `ffmpeg -hide_banner -nostdin -loglevel error -y -i <tempin> -vn -ac 1 -ar 16000 -acodec pcm_s16le -f wav <tempout>`. argv array, no shell. Cached `shutil.which('ffmpeg')` (or `STT_FFMPEG_BIN`). 30 s timeout, empty-output guard, structured `AudioDecodeError` on failure.
+  - Supports MIMEs `audio/webm`, `audio/ogg`, `audio/mpeg`/`mp3`, `audio/mp4`/`m4a`, `audio/aac`, `audio/flac`, `audio/opus` plus their `application/`/`x-` variants.
+- [x] Fixtures generated from `short_es.wav` via ffmpeg: `short_es.{webm,ogg,mp3,flac}` (all committed under `tests/fixtures/`).
+- [x] `tests/test_audio.py` (10):
+  - WAV happy paths (3).
+  - Each non-WAV fixture decodes to a target-spec WAV (16 kHz / mono / 16-bit).
+  - WebM without MIME header is sniffed by ffmpeg fallback.
+  - Corrupt non-WAV bytes raise `AudioDecodeError`.
+- [x] `tests/test_transcribe_endpoint.py` (13):
+  - `POST /transcribe` with each non-WAV fixture returns a Spanish transcript containing *planetas*.
 
 ### Exit gate
 
-- [ ] `curl -X POST http://127.0.0.1:8000/transcribe -F 'audio=@tests/fixtures/short_es.webm'` returns valid JSON.
+- [x] `pytest -x` → **39 passed in 8.95 s**.
+- [x] Live server: `curl -X POST /transcribe -F audio=@short_es.<ext>` for `webm`, `ogg`, `mp3`, `flac` all return valid Spanish transcripts containing *planetas / sistema / solar*. Opus encodings (`webm`, `ogg` at 32 kbps) show minor artifacts ("O la" vs "Hola") which is expected for that bitrate; MP3/FLAC are verbatim.
+- [x] Corrupt multipart upload returns structured `{error: ...}` JSON with HTTP 4xx, no crash.
 
 ---
 

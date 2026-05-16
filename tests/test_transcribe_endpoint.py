@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import threading
 import time
 import urllib.request
@@ -12,6 +13,10 @@ from pathlib import Path
 import pytest
 
 from stt_sandbox.api import ServiceConfig, _make_handler
+
+
+HAS_FFMPEG = shutil.which("ffmpeg") is not None
+ffmpeg_required = pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")
 
 
 BOUNDARY = "----TestBoundary12345"
@@ -185,7 +190,7 @@ def test_transcribe_stream_returns_not_implemented(shared_engine, short_es_wav):
     assert "Phase 3" in data["error"]
 
 
-def test_transcribe_unsupported_mime(shared_engine):
+def test_transcribe_corrupt_audio(shared_engine):
     config = _make_config()
     body = _multipart_body(b"\x1aE\xdf\xa3 not a wav", "audio/webm")
     with _serve(config, shared_engine) as (host, port):
@@ -195,7 +200,36 @@ def test_transcribe_unsupported_mime(shared_engine):
             f'multipart/form-data; boundary="{BOUNDARY}"',
             expect_status=400,
         )
-    assert "Phase 2" in data["error"] or "unsupported" in data["error"].lower()
+    assert "error" in data
+
+
+@ffmpeg_required
+@pytest.mark.parametrize(
+    ("filename", "mime"),
+    [
+        ("short_es.webm", "audio/webm"),
+        ("short_es.ogg", "audio/ogg"),
+        ("short_es.mp3", "audio/mpeg"),
+        ("short_es.flac", "audio/flac"),
+    ],
+)
+def test_transcribe_non_wav_round_trip(shared_engine, fixtures_dir, filename, mime):
+    path = fixtures_dir / filename
+    if not path.exists():
+        pytest.skip(f"missing fixture {path}")
+
+    config = _make_config()
+    body = _multipart_body(path.read_bytes(), mime, model=shared_engine.default_model)
+    with _serve(config, shared_engine) as (host, port):
+        status, data = _post(
+            f"http://{host}:{port}/transcribe",
+            body,
+            f'multipart/form-data; boundary="{BOUNDARY}"',
+            expect_status=200,
+        )
+    assert "planetas" in data["text"].lower(), data
+    assert data["language"] == "es"
+    assert data["duration_seconds"] > 0
 
 
 def test_engine_mode_no_gui(shared_engine):
