@@ -24,6 +24,7 @@ DEFAULT_LANGUAGE = os.environ.get("STT_DEFAULT_LANGUAGE", "es")
 DEFAULT_MODEL_NAMES = [
     "rhasspy/faster-whisper-tiny-int8",
     "rhasspy/faster-whisper-small-int8",
+    "rhasspy/faster-whisper-medium-int8"
 ]
 
 
