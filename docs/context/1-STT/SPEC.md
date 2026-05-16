@@ -68,7 +68,7 @@ Response:
   "mode": "both",
   "engine": true,
   "gui": true,
-  "model_loaded": "rhasspy/faster-whisper-small-int8",
+  "model_loaded": "rhasspy/faster-whisper-tiny-int8",
   "language": "es"
 }
 ```
@@ -77,18 +77,18 @@ Response:
 
 ```json
 {
-  "default": "rhasspy/faster-whisper-small-int8",
+  "default": "rhasspy/faster-whisper-tiny-int8",
   "models": [
     {
-      "name": "rhasspy/faster-whisper-small-int8",
-      "size": "small",
+      "name": "rhasspy/faster-whisper-tiny-int8",
+      "size": "tiny",
       "quantization": "int8",
       "language": "es",
       "loaded": true
     },
     {
-      "name": "rhasspy/faster-whisper-base-int8",
-      "size": "base",
+      "name": "rhasspy/faster-whisper-small-int8",
+      "size": "small",
       "quantization": "int8",
       "language": "es",
       "loaded": false
@@ -178,17 +178,23 @@ CLI flags `--mode {both,engine,gui}`, `--engine-url URL` (only honoured in `gui`
 
 ### 4.1 Performance targets
 
-Calibrated against Phase 0 measurements on the Hetzner CAX31-class Ampere VPS at `STT_DEFAULT_MODEL = rhasspy/faster-whisper-small-int8`, `cpu_threads=4`, `int8`, `beam_size=1`, VAD on. See [`/home/tho/www/tho/ai/4-stt/bench/results/arm64/RESULTS.md`](../../../bench/results/arm64/RESULTS.md).
+Calibrated against Phase 0 (synthetic Piper TTS bench) **and** the 2026-05-16 real-voice A/B on the deployed VPS (`https://ai.stt.thotenn.com`). Defaults locked: `STT_DEFAULT_MODEL = rhasspy/faster-whisper-tiny-int8`, `cpu_threads=4`, `compute_type=int8`, `beam_size=1`, VAD on. Full data: [`/home/tho/www/tho/ai/4-stt/bench/results/arm64/RESULTS.md`](../../../bench/results/arm64/RESULTS.md).
 
-- **RTF — 5 s utterance**: < 0.70 (decode in under 3.5 s). Measured floor 0.657.
-- **RTF — 30 s utterance**: < 0.50 (decode in under 15 s). Measured floor 0.217.
-- **First segment latency** ≈ total decode for utterances < 30 s (faster-whisper + VAD emits one segment per VAD-bounded speech window, and short utterances are typically a single window). This is why `/transcribe/stream` was cut from v1 — see SPEC §3.5.
-- **Cold start** (model not yet loaded): < 60 s including HuggingFace download (~250 MB) on first request, < 5 s on subsequent restarts (model on disk).
-- **Peak RSS**: < 1.0 GB with `small-int8` resident. Measured 706 MB.
+- **RTF — 5 s utterance**: < 0.30 (decode in under 1.5 s). Measured ~0.10 on a 13 s real-voice clip; short clips amortize less, expect ~0.12–0.20.
+- **RTF — 30 s utterance**: < 0.15. Measured 0.05 in Phase 0 synthetic bench.
+- **First segment latency** ≈ total decode for utterances < 30 s (VAD emits one segment per VAD-bounded speech window; short utterances are typically a single window). This is why `/transcribe/stream` was cut from v1 — see SPEC §3.5.
+- **Cold start** (model not yet loaded): < 30 s including HuggingFace download (~80 MB for `tiny-int8`) on first request, < 5 s on subsequent restarts (model on disk).
+- **Peak RSS**: < 400 MB with `tiny-int8` resident. Measured 250–315 MB on aarch64.
 
-Targets are checkpoints, not contracts. If real-world prod data shows we comfortably stay under (< 0.5 short / < 0.3 medium), the door is open to `medium-int8`. If we breach (> 0.9 short), escalate to `compute_type=int8_float16` or a whisper.cpp backend swap before degrading the model. Do **not** fall back to `base-int8` — Phase 0 ruled it out on accuracy grounds.
+Targets are checkpoints, not contracts. Fallback ladder, in order:
 
-End-to-end implication: a 5 s child utterance takes ~3 s STT decode. Pipeline design must overlap STT → LLM → TTS streaming wherever possible to keep perceived latency in line with kid attention spans.
+1. If real-world WER on `tiny-int8` degrades (kids with noise, accent edge cases) → switch default to `small-int8`. Already in the registry; just change `STT_DEFAULT_MODEL`. Costs ~2.5× more decode time but proven equal-or-better accuracy in the real-voice A/B.
+2. If `small-int8` also misses → try `compute_type=int8_float16` (~10–20 % speedup on Ampere, free).
+3. Only after both → whisper.cpp backend swap, per [`../0-general/02-alternatives.md`](../0-general/02-alternatives.md).
+
+**Do not use `base-int8`** — the 2026-05-16 real-voice A/B showed it is genuinely worse than `tiny` on kids-domain content (broke "triceratops" into two words, lost the question mark on "¿Por qué"). It has no role and is no longer in the default model registry.
+
+End-to-end implication: a 5 s child utterance takes ~0.6 s STT decode (down from ~3 s with the old `small-int8` default). Pipeline design should still overlap STT → LLM → TTS streaming wherever possible.
 
 ### 4.2 Concurrency
 
@@ -243,8 +249,8 @@ STT_ENGINE_URL=
 STT_CORS_ORIGIN=*
 
 STT_MODELS_DIR=models/whisper
-STT_DEFAULT_MODEL=rhasspy/faster-whisper-small-int8
-STT_MODEL_NAMES=["rhasspy/faster-whisper-small-int8","rhasspy/faster-whisper-base-int8","rhasspy/faster-whisper-tiny-int8"]
+STT_DEFAULT_MODEL=rhasspy/faster-whisper-tiny-int8
+STT_MODEL_NAMES=["rhasspy/faster-whisper-tiny-int8","rhasspy/faster-whisper-small-int8"]
 
 STT_DEFAULT_LANGUAGE=es
 STT_COMPUTE_TYPE=int8

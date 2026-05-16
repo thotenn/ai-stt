@@ -4,7 +4,7 @@ Guidance for Claude Code when working in this repository.
 
 ## Overview
 
-`stt-sandbox` is a small Python package that wraps the [`faster-whisper`](https://github.com/SYSTRAN/faster-whisper) library behind a stdlib HTTP server (`http.server`, no FastAPI/Flask) plus an optional browser GUI. Mirror image of [`../3-piper/`](../3-piper/) (TTS). Default model is `rhasspy/faster-whisper-small-int8` (Spanish, int8 quantized). Default language `es`.
+`stt-sandbox` is a small Python package that wraps the [`faster-whisper`](https://github.com/SYSTRAN/faster-whisper) library behind a stdlib HTTP server (`http.server`, no FastAPI/Flask) plus an optional browser GUI. Mirror image of [`../3-piper/`](../3-piper/) (TTS). Default model is `rhasspy/faster-whisper-tiny-int8` (Spanish, int8 quantized — switched from `small-int8` on 2026-05-16 after a real-voice A/B; see `bench/results/arm64/RESULTS.md` "2026-05-16 amendment"). Default language `es`.
 
 Phase 0 (benchmark) is closed; full results in [`bench/results/arm64/RESULTS.md`](bench/results/arm64/RESULTS.md). Phase 1 (skeleton) is in progress; tracking in [`docs/context/1-STT/CHECKLIST.md`](docs/context/1-STT/CHECKLIST.md).
 
@@ -64,6 +64,11 @@ A single process can run in one of three modes (gated in `api.py:main`):
 - First transcription per model triggers a HuggingFace download (~80 MB for tiny, ~250 MB for small) into `STT_MODELS_DIR`. CI / Docker should pre-warm or accept the cold-start cost on first request.
 - VAD on (`STT_VAD_ENABLED=true`) reduces Whisper hallucinations on silence but also means that for short utterances (5–10 s) the whole input usually comes back as a single segment — `/transcribe/stream` is **not** a perceived-latency win in that regime. See SPEC §3.5 and §4.1.
 - ARM tuning: Phase 0 measured that `cpu_threads=4` beats `cpu_threads=8` on the Hetzner CAX31 VPS. Do not set `STT_CPU_THREADS` above 4 without re-benching.
+- **`base-int8` is genuinely worse than `tiny-int8`** on the kids-domain real-voice A/B (broke "triceratops", lost the "¿" on "¿Por qué"). Do not add it back to the default model registry. If you need a step up in capacity, jump directly to `small-int8`.
+
+## Bench / model-choice guidance
+
+When changing the default model, **synthetic TTS clips are not enough**. Generated Piper voice has prosody artifacts (clipped vowels on proper nouns, unusual pause timing) that distort accuracy rankings — Phase 0's synthetic bench ranked `tiny < base < small`; a real-voice A/B with the same content showed `tiny ≈ small >> base`. The fix is cheap: record (or have the user record) a 10–15 s clip of representative target-domain content with a real microphone, run it through each candidate model via the production `/transcribe` endpoint, and compare transcripts side-by-side. Only then lock the default in `models.py` / `Dockerfile` / `docker-compose.yml` / `.env.example` (four places, kept in sync). The synthetic bench in `bench/run.py` is still useful for throughput / RAM, just not for accuracy.
 
 ## Coding rules
 

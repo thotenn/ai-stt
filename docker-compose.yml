@@ -11,8 +11,8 @@ services:
       STT_ENGINE_URL: ${STT_ENGINE_URL:-}
       STT_CORS_ORIGIN: ${STT_CORS_ORIGIN:-*}
       STT_MODELS_DIR: /app/models/whisper
-      STT_DEFAULT_MODEL: ${STT_DEFAULT_MODEL:-rhasspy/faster-whisper-small-int8}
-      STT_MODEL_NAMES: ${STT_MODEL_NAMES:-["rhasspy/faster-whisper-small-int8","rhasspy/faster-whisper-base-int8","rhasspy/faster-whisper-tiny-int8"]}
+      STT_DEFAULT_MODEL: ${STT_DEFAULT_MODEL:-rhasspy/faster-whisper-tiny-int8}
+      STT_MODEL_NAMES: ${STT_MODEL_NAMES:-["rhasspy/faster-whisper-tiny-int8","rhasspy/faster-whisper-small-int8"]}
       STT_DEFAULT_LANGUAGE: ${STT_DEFAULT_LANGUAGE:-es}
       STT_COMPUTE_TYPE: ${STT_COMPUTE_TYPE:-int8}
       STT_CPU_THREADS: ${STT_CPU_THREADS:-4}

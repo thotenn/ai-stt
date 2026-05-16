@@ -56,21 +56,35 @@ Host: Hetzner CAX31, 8 vCPUs / 16 GB RAM, Ubuntu 24.04, aarch64. Full analysis: 
 
   Eight threads does **not** help; medium clip nearly doubles in latency (thread contention or Hetzner shared-instance noise). 4 threads is the optimum for this VPS class.
 
-### Final Phase 0 decision — locked
+### Phase 0 decision (synthetic-bench era) — superseded
 
-- [x] **Default model**: `rhasspy/faster-whisper-small-int8`. Only model with acceptable Spanish accuracy.
-- [x] **`STT_CPU_THREADS=4`**. t=8 measured worse than t=4 on the actual VPS.
-- [x] **`STT_COMPUTE_TYPE=int8`**. `int8_float16` deferred to v1.x exploration.
-- [x] **`STT_BEAM_SIZE=1`**. ARM heuristic from `wyoming-faster-whisper`; sufficient.
-- [x] SPEC §4.1 amended: target relaxed to **RTF < 0.7 for 5 s, RTF < 0.5 for 30 s** (calibrated to measured floor 0.657 / 0.217).
-- [x] SPEC §3.5 amended: documented that `/transcribe/stream` has no perceived-latency benefit for utterances < 30 s (single VAD segment → first-segment = total decode).
-- [x] PLAN §8 unchanged — `small-int8` was already the provisional default; `cpu_threads=4` matches the pre-existing entry.
+- [x] **Default model**: `rhasspy/faster-whisper-small-int8` ~~(only model with acceptable Spanish accuracy)~~ — **overridden 2026-05-16 by real-voice A/B, see amendment below**.
+- [x] **`STT_CPU_THREADS=4`**. t=8 measured worse than t=4 on the actual VPS. *(Unchanged.)*
+- [x] **`STT_COMPUTE_TYPE=int8`**. `int8_float16` deferred to v1.x exploration. *(Unchanged.)*
+- [x] **`STT_BEAM_SIZE=1`**. ARM heuristic from `wyoming-faster-whisper`. *(Unchanged.)*
+- [x] SPEC §3.5 amended: documented that `/transcribe/stream` has no perceived-latency benefit for utterances < 30 s.
 
-### v1.x exploration tickets (post-launch, not blocking Phase 1)
+### 2026-05-16 amendment — real-voice A/B promoted `tiny-int8` to default
 
-- [ ] Micro-benchmark `compute_type=int8_float16` (1 min): `.venv/bin/python run.py --models rhasspy/faster-whisper-small-int8 --compute-type int8_float16 --out results/bench-aarch64-int8fp16.json`.
-- [ ] whisper.cpp swap-in benchmark per `docs/context/0-general/02-alternatives.md`, only if production feel is unsatisfactory after Phase 5 deploy.
-- [ ] Real child-voice `kid_es.wav` accuracy verification before public launch.
+After Phase 5 deploy at `https://ai.stt.thotenn.com`, the user recorded 4 kid-tutor questions in their own voice and ran them through `tiny / base / small` via the GUI. Full table in [`../../../bench/results/arm64/RESULTS.md`](../../../bench/results/arm64/RESULTS.md) "2026-05-16 amendment".
+
+- `tiny-int8`: ✅ all 4 questions verbatim, 1.42 s decode (RTF 0.104)
+- `base-int8`: ❌ broke "triceratops → tricera top", lost the "¿" on "Por qué" — same latency as tiny but worse accuracy
+- `small-int8`: ✅ all 4 verbatim, 3.65 s decode (RTF 0.283) — 2.6× slower than tiny for identical output
+
+**Defaults locked**:
+
+- [x] `STT_DEFAULT_MODEL` → `rhasspy/faster-whisper-tiny-int8` (Dockerfile, docker-compose.yml, .env.example, models.py).
+- [x] `STT_MODEL_NAMES` registry → `[tiny-int8, small-int8]`. `base-int8` dropped (no role: slower than tiny on big clips, worse than tiny on accuracy). `small-int8` kept as opt-in fallback.
+- [x] SPEC §4.1 re-calibrated: RTF target for 5 s utterance dropped from `< 0.7` to **`< 0.3`**. Peak RSS target from `< 1.0 GB` to **`< 400 MB`**.
+- [x] SPEC §3.2 / §3.3 examples updated to show `tiny-int8` as `default`.
+- [x] CLAUDE.md gained guidance that synthetic-TTS bench clips must not be trusted for WER decisions — always re-validate with a real-voice sample of the target domain before locking model choice.
+
+### v1.x exploration tickets (post-launch)
+
+- [ ] Validate `tiny-int8` with multiple speakers (different ages, accents, noise levels) — *especially* real child voices, which are the actual target population.
+- [ ] Micro-benchmark `compute_type=int8_float16` on `tiny-int8` (1 min): `.venv/bin/python run.py --models rhasspy/faster-whisper-tiny-int8 --compute-type int8_float16 --out results/bench-aarch64-tiny-int8fp16.json`.
+- [ ] whisper.cpp swap-in benchmark per `docs/context/0-general/02-alternatives.md`, only if production feel is unsatisfactory.
 
 ---
 

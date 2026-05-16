@@ -131,3 +131,49 @@ The matrix below was written *before* the 8-thread run. With 8 threads now ruled
 - Real child-voice `kid_es.wav` accuracy verification before public launch.
 
 Phase 0 is closed. Phase 1 unblocked.
+
+---
+
+## 2026-05-16 amendment — real-voice A/B overrides the Phase 0 model choice
+
+**Context**: Phase 0 ranked accuracy using clips synthesized by Piper TTS (`es_MX-ald-medium`). Once `https://ai.stt.thotenn.com` was live (Phase 5), the user recorded the same content with their own voice into the browser GUI and ran all three models back-to-back. The synthetic vs. real divergence was dramatic enough to override the original default.
+
+**Setup**: same VPS (Hetzner CAX31 Ampere, aarch64), same defaults (`int8`, `beam=1`, `cpu_threads=4`, VAD on). Single recorded clip of 4 kid-tutor questions, ~13 s total, decoded with each model via the production HTTP endpoint.
+
+**Questions spoken**:
+
+1. "¿Qué es el sistema solar?"
+2. "Cuéntame del Triceratops."
+3. "¿Cuántas patas tiene una araña?"
+4. "¿Por qué el cielo es azul?"
+
+**Results**:
+
+| Model | Decode (s) | RTF | Transcript notes |
+|---|---|---|---|
+| **tiny-int8**  | 1.42 | 0.104 | ✅ all 4 questions verbatim, including "triceratops" and "¿Por qué" |
+| base-int8  | 1.40 | 0.105 | ❌ "triceratops → tricera top", "¿Por qué → Porque" — content errors |
+| small-int8 | 3.65 | 0.283 | ✅ all 4 verbatim (identical to tiny) |
+
+**Findings**:
+
+- **`tiny-int8` is perfect on real human voice in the kids-tutor domain.** Phase 0 had ranked it ❌ because it dropped "Hola" on the Piper synthetic clip — that was a TTS artifact, not a model weakness. Natural voice does not trigger it.
+- **`base-int8` is genuinely worse than `tiny`**, with the same decode latency. Errors are *content* errors (split proper noun, lost question mark) that would actively confuse the downstream LLM. It has no role and is no longer in the default model registry.
+- **`small-int8` is equal in accuracy to `tiny`** on this content, at 2.6× the decode cost. Keep it in the registry as an opt-in fallback for harder inputs (noise, fast speech, unfamiliar vocabulary) but not as the default.
+
+**Defaults updated**:
+
+| Setting | Old (Phase 0) | New (real-voice) |
+|---|---|---|
+| `STT_DEFAULT_MODEL` | `small-int8` | **`tiny-int8`** |
+| `STT_MODEL_NAMES` registry | `[small, base, tiny]` | **`[tiny, small]`** (base dropped, tiny first) |
+| 5 s RTF target (SPEC §4.1) | < 0.7 | **< 0.3** |
+| Peak RSS target | < 1.0 GB | **< 400 MB** |
+| Cold-start download | ~250 MB | **~80 MB** |
+
+**Lesson learned**: synthesized TTS clips are fine for *throughput* comparisons (they have stable timing, deterministic content) but **engaño para WER en producción**. TTS prosody can confuse smaller models in ways that real human speech does not. Future bench passes should include a real-voice sample of the actual target domain *before* locking a model default. Recorded in `CLAUDE.md` as guidance.
+
+**v1.x follow-ups still open**:
+- Validate `tiny-int8` with multiple speakers (different ages, accents, noise levels). Especially: actual child voices.
+- If a regression appears in production, the fallback `small-int8` is one env var away.
+- `compute_type=int8_float16` micro-benchmark still pending — would shave latency further on the new default.

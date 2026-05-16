@@ -18,13 +18,12 @@ class ModelSpec:
 
 load_env()
 
-DEFAULT_MODEL = os.environ.get("STT_DEFAULT_MODEL", "rhasspy/faster-whisper-small-int8")
+DEFAULT_MODEL = os.environ.get("STT_DEFAULT_MODEL", "rhasspy/faster-whisper-tiny-int8")
 DEFAULT_LANGUAGE = os.environ.get("STT_DEFAULT_LANGUAGE", "es")
 
 DEFAULT_MODEL_NAMES = [
-    "rhasspy/faster-whisper-small-int8",
-    "rhasspy/faster-whisper-base-int8",
     "rhasspy/faster-whisper-tiny-int8",
+    "rhasspy/faster-whisper-small-int8",
 ]
 
 
