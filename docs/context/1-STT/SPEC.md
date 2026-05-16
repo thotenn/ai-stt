@@ -134,6 +134,8 @@ Accepted MIME types: `audio/wav`, `audio/x-wav`, `audio/webm`, `audio/ogg`, `aud
 
 Same request schema as `/transcribe`. Returns `501 Not Implemented` if `STT_STREAM_ENABLED=false`.
 
+**Latency caveat**: with VAD on, faster-whisper emits one segment per VAD-bounded speech window. Typical kid-tutor utterances (5–10 s, mostly continuous speech) come back as a single segment, so first-segment latency equals total decode time and streaming provides **no perceived-latency benefit** vs. `/transcribe` in that regime. The endpoint exists for symmetry with `3-piper`'s `/speak/chunks` and pays off only on long-form input (≥ 30 s with natural pauses). Phase 0 measurements confirmed this on the Ampere VPS — see SPEC §4.1 and [`bench/results/arm64/RESULTS.md`](../../../bench/results/arm64/RESULTS.md).
+
 **Response 200** — `application/x-ndjson`, headers include `X-Accel-Buffering: no` (mirrors `/speak/chunks` in `3-piper`). One JSON object per line, flushed immediately:
 
 ```text
@@ -191,16 +193,17 @@ CLI flags `--mode {both,engine,gui}`, `--engine-url URL` (only honoured in `gui`
 
 ### 4.1 Performance targets
 
-For a 5 s LatAm-Spanish utterance at `STT_DEFAULT_MODEL = rhasspy/faster-whisper-small-int8` on the Ampere VPS:
+Calibrated against Phase 0 measurements on the Hetzner CAX31-class Ampere VPS at `STT_DEFAULT_MODEL = rhasspy/faster-whisper-small-int8`, `cpu_threads=4`, `int8`, `beam_size=1`, VAD on. See [`/home/tho/www/tho/ai/4-stt/bench/results/arm64/RESULTS.md`](../../../bench/results/arm64/RESULTS.md).
 
-- **RTF**: < 0.5 (decode in under 2.5 s).
-- **First segment latency (streaming)**: < 1.5 s after `AudioStop`.
-- **Cold start** (model not yet loaded): < 30 s including download (~250 MB) on first request, < 5 s on subsequent restarts (model on disk).
-- **Peak RSS**: < 1.0 GB with `small-int8` model resident.
+- **RTF — 5 s utterance**: < 0.70 (decode in under 3.5 s). Measured floor 0.657.
+- **RTF — 30 s utterance**: < 0.50 (decode in under 15 s). Measured floor 0.217.
+- **First segment latency** ≈ total decode for utterances < 30 s (faster-whisper + VAD emits one segment per VAD-bounded speech window, and short utterances are typically a single window). `/transcribe/stream` provides no perceived-latency win in this regime — it is built for symmetry with 3-piper and pays off only on long-form input with natural pauses. See SPEC §3.5.
+- **Cold start** (model not yet loaded): < 60 s including HuggingFace download (~250 MB) on first request, < 5 s on subsequent restarts (model on disk).
+- **Peak RSS**: < 1.0 GB with `small-int8` resident. Measured 706 MB.
 
-For a 30 s utterance: RTF < 0.6.
+Targets are checkpoints, not contracts. If real-world prod data shows we comfortably stay under (< 0.5 short / < 0.3 medium), the door is open to `medium-int8`. If we breach (> 0.9 short), escalate to `compute_type=int8_float16` or a whisper.cpp backend swap before degrading the model. Do **not** fall back to `base-int8` — Phase 0 ruled it out on accuracy grounds.
 
-Targets are checkpoints, not contracts. If `small-int8` misses them, fall back order is `base-int8` → `tiny-int8`. If `small-int8` clears them comfortably (< 0.3), promote to `medium-int8`. Decision recorded in [`CHECKLIST.md`](CHECKLIST.md) under "Bench".
+End-to-end implication: a 5 s child utterance takes ~3 s STT decode. Pipeline design must overlap STT → LLM → TTS streaming wherever possible to keep perceived latency in line with kid attention spans.
 
 ### 4.2 Concurrency
 

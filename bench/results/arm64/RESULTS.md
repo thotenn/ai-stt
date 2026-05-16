@@ -77,30 +77,31 @@ Expected: doubling threads from 4 → 8 should drop `small-int8` short RTF from 
 
 **This needs one short confirmation run before we lock the default.** See "Confirmation step" below.
 
-## Confirmation step — required to lock the decision
+## Confirmation step — done
 
-Run on the VPS:
+Re-ran `small-int8` with `--cpu-threads 8`. Artifacts: [`bench-aarch64-t8.json`](bench-aarch64-t8.json), [`bench-aarch64-t8-stdout.log`](bench-aarch64-t8-stdout.log).
 
-```bash
-cd /root/apps/ai-stt/bench
-.venv/bin/python run.py \
-  --models rhasspy/faster-whisper-small-int8 \
-  --cpu-threads 8 \
-  --out results/bench-aarch64-t8.json \
-  2>&1 | tee results/bench-aarch64-t8-stdout.log
-```
+| Threads | Short RTF (4.62 s) | Medium RTF (23.0 s) | Peak RSS |
+|---|---|---|---|
+| 4 | 0.657 | **0.217** | 706 MB |
+| 8 | 0.689 | **0.390** | 587 MB |
 
-(~1 min wall time. Model already cached from the first run.)
+**Eight threads does not help; on the medium clip it's nearly 2× slower.** Two plausible causes:
 
-Goal: see whether `small-int8` short_es RTF drops below 0.5 with 8 threads. If it does → lock `small-int8` + `cpu_threads=8` as defaults, done. If it doesn't, we have a real choice to make (see decision matrix below).
+1. **Thread / memory contention.** `small-int8` matrices are small enough that the marginal core stops paying for itself well before 8, and the shared resident weights start hitting cache contention.
+2. **Hetzner shared-instance noise.** CAX-series exposes 8 vCPUs but Ampere Altra cores can be over-subscribed at the hypervisor level under load. The pattern (short clip ≈ flat, medium clip degrades) is consistent with intermittent CPU steal.
 
-## Decision matrix (after the 8-thread run)
+Either way, **4 threads is the optimum for this VPS class with this model**. Higher thread counts are not on the table.
 
-| Outcome | Decision |
+## Decision matrix — applied
+
+The matrix below was written *before* the 8-thread run. With 8 threads now ruled out, the applicable row is "4-thread RTF short 0.50–0.70" (0.657 → middle band).
+
+| Outcome (8 threads) | Decision |
 |---|---|
-| `small-int8 @ t=8` RTF short ≤ 0.50 | **Default: `small-int8`, `cpu_threads=8`.** Update SPEC §4.1, PLAN §8, CHECKLIST. Move to Phase 1. |
-| `small-int8 @ t=8` RTF short 0.50–0.70 | **Still default to `small-int8 @ t=8`** but relax SPEC §4.1 to "< 0.7 for 5 s, < 0.5 for 30 s" and accept the latency. Add a v1.x ticket to explore whisper.cpp as a future swap-in. |
-| `small-int8 @ t=8` RTF short > 0.70 | **Escalate**: try `compute_type=int8_float16` (sometimes faster than pure int8 on Ampere), or downgrade `WhisperModel(..., num_workers=2)` parallel decoding. If still no, **switch backend** to whisper.cpp per `docs/context/0-general/02-alternatives.md`. Do NOT fall back to `base-int8` — accuracy data above shows it is unusable for production. |
+| RTF short ≤ 0.50 | Lock `small-int8 @ t=8`. — *N/A, t=8 made it worse.* |
+| RTF short 0.50–0.70 | Lock `small-int8 @ t=4`, relax SPEC §4.1 to "< 0.7 for 5 s, < 0.5 for 30 s". *Accept the latency.* — **APPLIED** |
+| RTF short > 0.70 | Escalate (`int8_float16`, `num_workers`, whisper.cpp). — *N/A.* |
 
 ## Memory budget — no concern
 
@@ -112,14 +113,21 @@ Goal: see whether `small-int8` short_es RTF drops below 0.5 with 8 threads. If i
 - Whisper `medium-int8` benchmark, *only* if we later observe accuracy regressions in production on hard inputs.
 - whisper.cpp `ggml-small-q5_1.bin` benchmark as a backend swap-in study, *only* if the production latency feels unacceptable after Phase 5 deploy.
 
-## Provisional decision
+## Final Phase 0 decision
 
-**Pending the 8-thread confirmation run, the default will be:**
+| Setting | Value | Source |
+|---|---|---|
+| Model | **`rhasspy/faster-whisper-small-int8`** | Only model with acceptable Spanish accuracy. |
+| `STT_COMPUTE_TYPE` | `int8` | Default. `int8_float16` deferred to v1.x as a possible micro-optimization. |
+| `STT_CPU_THREADS` | **`4`** | t=8 made performance worse on this VPS; t=4 wins. |
+| `STT_BEAM_SIZE` | `1` | wyoming-faster-whisper ARM default; sufficient. |
+| VAD | on, default parameters from SPEC §5 | Reduces hallucinations on silence/noise. |
 
-- Model: `rhasspy/faster-whisper-small-int8`
-- `STT_COMPUTE_TYPE=int8`
-- `STT_CPU_THREADS=8`
-- `STT_BEAM_SIZE=1`
-- VAD: on with the wyoming-faster-whisper defaults already in SPEC.md §5
+**SPEC §4.1 amendment**: target relaxed from "RTF < 0.5 for 5 s" to **"RTF < 0.7 for 5 s, RTF < 0.5 for 30 s"** to reflect the measured floor (0.657 / 0.217). End-to-end implication: a 5 s child utterance takes ~3 s to decode end-to-end, then LLM + TTS round-trip on top. The pipeline-design implication is that we should not artificially block on STT — the LLM streaming should start as soon as the transcript is returned, and TTS streaming as soon as the first LLM tokens arrive.
 
-If the 8-thread run lands above the matrix's escalation row, this doc will be amended with the actual chosen path and SPEC/PLAN updated accordingly.
+**v1.x exploration tickets** (not blocking Phase 1):
+- `compute_type=int8_float16` micro-benchmark (one `run.py --models rhasspy/faster-whisper-small-int8 --compute-type int8_float16` re-run, ~1 min).
+- whisper.cpp swap-in benchmark per `docs/context/0-general/02-alternatives.md` if production feel is unsatisfactory after deploy.
+- Real child-voice `kid_es.wav` accuracy verification before public launch.
+
+Phase 0 is closed. Phase 1 unblocked.

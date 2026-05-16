@@ -1,0 +1,33 @@
+[env] {
+  "python": "3.12.3",
+  "machine": "aarch64",
+  "platform": "Linux-6.8.0-111-generic-aarch64-with-glibc2.39",
+  "cpu_count": 8,
+  "cpu_threads_used": 8,
+  "compute_type": "int8",
+  "beam_size": 1,
+  "language": "es",
+  "vad": true,
+  "repeats": 3
+}
+
+[load] rhasspy/faster-whisper-small-int8
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+  loaded in 0.83s, RSS after load 346 MB
+  run 1: decode=3.40s rtf=0.735 first_seg=3.40s peak_rss=531MB
+  run 2: decode=2.88s rtf=0.623 first_seg=2.88s peak_rss=532MB
+  run 3: decode=3.27s rtf=0.709 first_seg=3.27s peak_rss=532MB
+
+[load] rhasspy/faster-whisper-small-int8
+  loaded in 0.53s, RSS after load 383 MB
+  run 1: decode=9.71s rtf=0.422 first_seg=9.71s peak_rss=587MB
+  run 2: decode=8.73s rtf=0.379 first_seg=8.73s peak_rss=587MB
+  run 3: decode=8.50s rtf=0.369 first_seg=8.49s peak_rss=587MB
+
+=== summary ===
+model                                            clip                dur   load    rtf    1st  rss_mb
+-----------------------------------------------------------------------------------------------------
+rhasspy/faster-whisper-small-int8                short_es.wav       4.62   0.83  0.689   3.18     532
+rhasspy/faster-whisper-small-int8                medium_es.wav     23.00   0.53  0.390   8.98     587
+
+[wrote] bench/results/bench-aarch64-t8.json
