@@ -29,27 +29,52 @@ Conventions:
   | small-int8  | short_es  | 0.242 | 1.12 s | 668 MB | ✅ verbatim |
   | small-int8  | medium_es | 0.078 | 1.80 s | 744 MB | ⚠️ best — only proper-noun slips ("Uranus"/"Neptune") |
 
-### ARM run on Hetzner VPS — pending (blocking the decision)
+### ARM run on Hetzner VPS — done (sweep with 4 threads)
 
-- [ ] Copy/clone `bench/` to the Ampere VPS, `python3 -m venv .venv && .venv/bin/pip install faster-whisper psutil`.
-- [ ] Run `.venv/bin/python run.py --out results/bench-aarch64.json`. Capture stdout to `results/bench-aarch64-stdout.log`.
-- [ ] Fill table:
+Host: Hetzner CAX31, 8 vCPUs / 16 GB RAM, Ubuntu 24.04, aarch64. Full analysis: [`../../../bench/results/arm64/RESULTS.md`](../../../bench/results/arm64/RESULTS.md).
 
-  | Model | Clip | RTF (avg 3) | First-segment | Peak RSS |
-  |---|---|---|---|---|
-  | tiny-int8   | short_es  |   |   |   |
-  | tiny-int8   | medium_es |   |   |   |
-  | base-int8   | short_es  |   |   |   |
-  | base-int8   | medium_es |   |   |   |
-  | small-int8  | short_es  |   |   |   |
-  | small-int8  | medium_es |   |   |   |
+- [x] Bench cloned to `/root/apps/ai-stt/bench`, venv with `faster-whisper 1.2.1` + `psutil`.
+- [x] `run.py` executed at default `cpu_threads=4`. Artifacts: `bench-aarch64.json`, `bench-aarch64-stdout.log`.
 
-- [ ] **Decision**: default model = ________________. Reasoning: ________________.
-- [ ] Update `SPEC.md` §4.1 and `PLAN.md` §8 only if the decision differs from the provisional `small-int8`.
+  | Model | Clip | RTF (avg 3) | First-segment | Peak RSS | Accuracy |
+  |---|---|---|---|---|---|
+  | tiny-int8   | short_es  | 0.152 | 0.70 s | 243 MB | ❌ drops *Hola* |
+  | tiny-int8   | medium_es | 0.051 | 1.18 s | 312 MB | ❌ "Mercurio→secano", "hielo→hierro" |
+  | base-int8   | short_es  | 0.235 | 1.09 s | 382 MB | ❌❌ "o la como estas" |
+  | base-int8   | medium_es | 0.124 | 1.79 s | 468 MB | ❌ missing *Urano*, "Nectunno" |
+  | small-int8  | short_es  | **0.657** | 3.04 s | 706 MB | ✅ all content words correct |
+  | small-int8  | medium_es | **0.217** | 4.99 s | 702 MB | ✅ best — *Urano* and *anillos* captured |
 
-### Provisional recommendation from local baseline
+### Decision sub-step — required to lock the default
 
-**`rhasspy/faster-whisper-small-int8`** — only model with acceptable Spanish accuracy on the synthetic fixtures; throughput headroom is large enough (RTF 0.08–0.24 on x86) that even a 2× ARM penalty keeps us inside the SPEC §4.1 targets. Fallback path documented in `RESULTS-LOCAL-X86.md` (try `--cpu-threads 8` → only then `base-int8` after a real-voice WER check → only then `whisper.cpp`).
+Only `small-int8` clears accuracy. At 4 threads its short-clip RTF (0.657) is **above** the SPEC §4.1 target (< 0.5). VPS has 8 vCPUs (no SMT on Ampere) — doubling threads should land us in budget.
+
+- [ ] Run on VPS:
+
+  ```bash
+  cd /root/apps/ai-stt/bench
+  .venv/bin/python run.py \
+    --models rhasspy/faster-whisper-small-int8 \
+    --cpu-threads 8 \
+    --out results/bench-aarch64-t8.json \
+    2>&1 | tee results/bench-aarch64-t8-stdout.log
+  ```
+
+- [ ] Apply decision matrix (from `arm64/RESULTS.md`):
+  - RTF short ≤ 0.50 → **lock `small-int8` + `cpu_threads=8`**, no SPEC change.
+  - RTF short 0.50–0.70 → lock same defaults, relax SPEC §4.1 to "< 0.7 for 5 s, < 0.5 for 30 s".
+  - RTF short > 0.70 → escalate (try `compute_type=int8_float16` / `num_workers=2` / whisper.cpp backend swap). Do **not** fall back to `base-int8` — accuracy data above rules it out.
+
+- [ ] **Decision (filled after the 8-thread run)**:
+  - Default model: ________________
+  - `STT_CPU_THREADS`: ________________
+  - `STT_COMPUTE_TYPE`: ________________
+  - Notes / SPEC amendments: ________________
+
+### Findings to fold into PLAN / SPEC regardless of the decision
+
+- [ ] PLAN §6 + SPEC §3.5: note that for typical 5–10 s utterances Whisper emits a single VAD-bounded segment, so `/transcribe/stream` does **not** save perceived latency on short inputs — it remains useful for long-form (≥ 30 s with pauses) only. The endpoint is still worth building (symmetric API, useful for long inputs, low cost), but should not be marketed as a latency win for kid questions.
+- [ ] SPEC §5 default: `STT_CPU_THREADS=8` (was 4) once the decision row above lands the value.
 
 ---
 

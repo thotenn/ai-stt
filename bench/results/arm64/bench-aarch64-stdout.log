@@ -1,0 +1,61 @@
+[env] {
+  "python": "3.12.3",
+  "machine": "aarch64",
+  "platform": "Linux-6.8.0-111-generic-aarch64-with-glibc2.39",
+  "cpu_count": 8,
+  "cpu_threads_used": 4,
+  "compute_type": "int8",
+  "beam_size": 1,
+  "language": "es",
+  "vad": true,
+  "repeats": 3
+}
+
+[load] rhasspy/faster-whisper-tiny-int8
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+  loaded in 2.12s, RSS after load 161 MB
+  run 1: decode=0.77s rtf=0.166 first_seg=0.77s peak_rss=236MB
+  run 2: decode=0.69s rtf=0.150 first_seg=0.69s peak_rss=243MB
+  run 3: decode=0.65s rtf=0.141 first_seg=0.65s peak_rss=243MB
+
+[load] rhasspy/faster-whisper-tiny-int8
+  loaded in 0.42s, RSS after load 231 MB
+  run 1: decode=1.16s rtf=0.051 first_seg=1.16s peak_rss=305MB
+  run 2: decode=1.14s rtf=0.049 first_seg=1.14s peak_rss=312MB
+  run 3: decode=1.25s rtf=0.054 first_seg=1.25s peak_rss=312MB
+
+[load] rhasspy/faster-whisper-base-int8
+  loaded in 2.11s, RSS after load 292 MB
+  run 1: decode=1.08s rtf=0.234 first_seg=1.08s peak_rss=382MB
+  run 2: decode=1.10s rtf=0.237 first_seg=1.10s peak_rss=382MB
+  run 3: decode=1.09s rtf=0.235 first_seg=1.09s peak_rss=382MB
+
+[load] rhasspy/faster-whisper-base-int8
+  loaded in 0.41s, RSS after load 358 MB
+  run 1: decode=2.92s rtf=0.127 first_seg=1.82s peak_rss=447MB
+  run 2: decode=2.72s rtf=0.118 first_seg=1.69s peak_rss=468MB
+  run 3: decode=2.95s rtf=0.128 first_seg=1.84s peak_rss=468MB
+
+[load] rhasspy/faster-whisper-small-int8
+  loaded in 2.78s, RSS after load 592 MB
+  run 1: decode=3.09s rtf=0.670 first_seg=3.09s peak_rss=705MB
+  run 2: decode=3.04s rtf=0.657 first_seg=3.04s peak_rss=705MB
+  run 3: decode=2.97s rtf=0.644 first_seg=2.97s peak_rss=688MB
+
+[load] rhasspy/faster-whisper-small-int8
+  loaded in 0.52s, RSS after load 656 MB
+  run 1: decode=4.95s rtf=0.215 first_seg=4.95s peak_rss=702MB
+  run 2: decode=4.99s rtf=0.217 first_seg=4.99s peak_rss=702MB
+  run 3: decode=5.03s rtf=0.219 first_seg=5.03s peak_rss=689MB
+
+=== summary ===
+model                                            clip                dur   load    rtf    1st  rss_mb
+-----------------------------------------------------------------------------------------------------
+rhasspy/faster-whisper-tiny-int8                 short_es.wav       4.62   2.12  0.152   0.70     243
+rhasspy/faster-whisper-tiny-int8                 medium_es.wav     23.00   0.42  0.051   1.18     312
+rhasspy/faster-whisper-base-int8                 short_es.wav       4.62   2.11  0.235   1.09     382
+rhasspy/faster-whisper-base-int8                 medium_es.wav     23.00   0.41  0.124   1.79     468
+rhasspy/faster-whisper-small-int8                short_es.wav       4.62   2.78  0.657   3.04     706
+rhasspy/faster-whisper-small-int8                medium_es.wav     23.00   0.52  0.217   4.99     702
+
+[wrote] /root/apps/ai-stt/bench/results/bench-aarch64.json

@@ -1,0 +1,220 @@
+{
+  "environment": {
+    "python": "3.12.3",
+    "machine": "aarch64",
+    "platform": "Linux-6.8.0-111-generic-aarch64-with-glibc2.39",
+    "cpu_count": 8,
+    "cpu_threads_used": 4,
+    "compute_type": "int8",
+    "beam_size": 1,
+    "language": "es",
+    "vad": true,
+    "repeats": 3
+  },
+  "results": [
+    {
+      "model": "rhasspy/faster-whisper-tiny-int8",
+      "clip": "short_es.wav",
+      "clip_duration_seconds": 4.621,
+      "load_seconds": 2.122,
+      "decode_avg_seconds": 0.704,
+      "rtf_avg": 0.152,
+      "first_segment_avg_seconds": 0.704,
+      "peak_rss_mb": 242.7,
+      "runs": [
+        {
+          "run": 1,
+          "decode_seconds": 0.768,
+          "first_segment_seconds": 0.768,
+          "rtf": 0.166,
+          "peak_rss_mb": 236.1
+        },
+        {
+          "run": 2,
+          "decode_seconds": 0.693,
+          "first_segment_seconds": 0.693,
+          "rtf": 0.15,
+          "peak_rss_mb": 242.7
+        },
+        {
+          "run": 3,
+          "decode_seconds": 0.651,
+          "first_segment_seconds": 0.651,
+          "rtf": 0.141,
+          "peak_rss_mb": 242.7
+        }
+      ],
+      "transcript": "\u00bfC\u00f3mo est\u00e1s? Quiero aprender sobre los planetas del sistema solar."
+    },
+    {
+      "model": "rhasspy/faster-whisper-tiny-int8",
+      "clip": "medium_es.wav",
+      "clip_duration_seconds": 22.999,
+      "load_seconds": 0.422,
+      "decode_avg_seconds": 1.183,
+      "rtf_avg": 0.051,
+      "first_segment_avg_seconds": 1.183,
+      "peak_rss_mb": 312.5,
+      "runs": [
+        {
+          "run": 1,
+          "decode_seconds": 1.163,
+          "first_segment_seconds": 1.163,
+          "rtf": 0.051,
+          "peak_rss_mb": 305.4
+        },
+        {
+          "run": 2,
+          "decode_seconds": 1.137,
+          "first_segment_seconds": 1.136,
+          "rtf": 0.049,
+          "peak_rss_mb": 312.5
+        },
+        {
+          "run": 3,
+          "decode_seconds": 1.249,
+          "first_segment_seconds": 1.249,
+          "rtf": 0.054,
+          "peak_rss_mb": 312.5
+        }
+      ],
+      "transcript": "buenos d\u00edas a todos los ni\u00f1os. Hoy vamos a explorar un tema fascinante, los planetas del sistema solar. El sol es una estrella amarilla y gigante alrededor de la cual giran ocho planetas. Me curioso es el m\u00e1s secano seguido por Venus, la tierra, Marte, Jupiter, Saturno, Urano y Neptuneo. Sab\u00edas que Saturno tienen ni\u00f1os de hierro y rocas."
+    },
+    {
+      "model": "rhasspy/faster-whisper-base-int8",
+      "clip": "short_es.wav",
+      "clip_duration_seconds": 4.621,
+      "load_seconds": 2.113,
+      "decode_avg_seconds": 1.089,
+      "rtf_avg": 0.235,
+      "first_segment_avg_seconds": 1.089,
+      "peak_rss_mb": 381.9,
+      "runs": [
+        {
+          "run": 1,
+          "decode_seconds": 1.083,
+          "first_segment_seconds": 1.083,
+          "rtf": 0.234,
+          "peak_rss_mb": 381.9
+        },
+        {
+          "run": 2,
+          "decode_seconds": 1.097,
+          "first_segment_seconds": 1.097,
+          "rtf": 0.237,
+          "peak_rss_mb": 381.9
+        },
+        {
+          "run": 3,
+          "decode_seconds": 1.086,
+          "first_segment_seconds": 1.086,
+          "rtf": 0.235,
+          "peak_rss_mb": 381.9
+        }
+      ],
+      "transcript": "o la como estas, quiera aprender sobre los planetas del sistema solar."
+    },
+    {
+      "model": "rhasspy/faster-whisper-base-int8",
+      "clip": "medium_es.wav",
+      "clip_duration_seconds": 22.999,
+      "load_seconds": 0.409,
+      "decode_avg_seconds": 2.864,
+      "rtf_avg": 0.124,
+      "first_segment_avg_seconds": 1.786,
+      "peak_rss_mb": 468.0,
+      "runs": [
+        {
+          "run": 1,
+          "decode_seconds": 2.916,
+          "first_segment_seconds": 1.825,
+          "rtf": 0.127,
+          "peak_rss_mb": 446.8
+        },
+        {
+          "run": 2,
+          "decode_seconds": 2.724,
+          "first_segment_seconds": 1.692,
+          "rtf": 0.118,
+          "peak_rss_mb": 468.0
+        },
+        {
+          "run": 3,
+          "decode_seconds": 2.952,
+          "first_segment_seconds": 1.84,
+          "rtf": 0.128,
+          "peak_rss_mb": 468.0
+        }
+      ],
+      "transcript": "Buenos d\u00edas a todos los ni\u00f1os. Hoy vamos a explorar un tema fascinante, los planetas del sistema solar. El sol es una estrella amarilla y gigante alrededor de la cual giran ocho planetas. Me curioso ese m\u00e1s cercano, seguido por Venus, la Tierra, Marte, J\u00fapiter, Saturno, y Nectunno. Sab\u00edas que Saturno tiene anillos de hielo y rocas."
+    },
+    {
+      "model": "rhasspy/faster-whisper-small-int8",
+      "clip": "short_es.wav",
+      "clip_duration_seconds": 4.621,
+      "load_seconds": 2.781,
+      "decode_avg_seconds": 3.035,
+      "rtf_avg": 0.657,
+      "first_segment_avg_seconds": 3.035,
+      "peak_rss_mb": 705.5,
+      "runs": [
+        {
+          "run": 1,
+          "decode_seconds": 3.094,
+          "first_segment_seconds": 3.094,
+          "rtf": 0.67,
+          "peak_rss_mb": 705.5
+        },
+        {
+          "run": 2,
+          "decode_seconds": 3.038,
+          "first_segment_seconds": 3.038,
+          "rtf": 0.657,
+          "peak_rss_mb": 705.5
+        },
+        {
+          "run": 3,
+          "decode_seconds": 2.974,
+          "first_segment_seconds": 2.974,
+          "rtf": 0.644,
+          "peak_rss_mb": 688.0
+        }
+      ],
+      "transcript": "Hola como estas quiero aprender sobre los planetas del sistema solar"
+    },
+    {
+      "model": "rhasspy/faster-whisper-small-int8",
+      "clip": "medium_es.wav",
+      "clip_duration_seconds": 22.999,
+      "load_seconds": 0.516,
+      "decode_avg_seconds": 4.989,
+      "rtf_avg": 0.217,
+      "first_segment_avg_seconds": 4.989,
+      "peak_rss_mb": 701.9,
+      "runs": [
+        {
+          "run": 1,
+          "decode_seconds": 4.951,
+          "first_segment_seconds": 4.951,
+          "rtf": 0.215,
+          "peak_rss_mb": 701.9
+        },
+        {
+          "run": 2,
+          "decode_seconds": 4.99,
+          "first_segment_seconds": 4.99,
+          "rtf": 0.217,
+          "peak_rss_mb": 701.9
+        },
+        {
+          "run": 3,
+          "decode_seconds": 5.026,
+          "first_segment_seconds": 5.026,
+          "rtf": 0.219,
+          "peak_rss_mb": 688.7
+        }
+      ],
+      "transcript": "Buenos d\u00edas a todos los ni\u00f1os. Hoy vamos a explorar un tema fascinante, los planetas del sistema solar. El sol es una estrella amarilla y gigante alrededor de la cual giran ocho planetas. Me curi\u00f3 ese m\u00e1s cercano seguido por Venus, la Tierra, Marte, J\u00fapiter, Saturno, Urano y Neptune. Sab\u00edas que Saturno tiene anillos de hielo y rocas."
+    }
+  ]
+}
