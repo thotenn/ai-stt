@@ -11,28 +11,45 @@ Conventions:
 
 ## Phase 0 — Benchmark (blocks Phase 1+)
 
-- [ ] Provision a throwaway venv on the Hetzner Ampere VPS: `python3.12 -m venv /tmp/bench && source /tmp/bench/bin/activate && pip install faster-whisper`.
-- [ ] Drop three LatAm-Spanish reference clips into `/tmp/bench/clips/`:
-  - [ ] `short_es.wav` — ~5 s, clean adult voice.
-  - [ ] `medium_es.wav` — ~30 s, clean adult voice.
-  - [ ] `kid_es.wav` — ~5 s, child voice if obtainable (record one if needed).
-- [ ] Run a bench script that, for each model in `[tiny-int8, base-int8, small-int8]`, loads the model, transcribes each clip 3×, and prints `model, clip, avg_decode_s, avg_rtf, peak_rss_mb, first_segment_latency_s, transcript_text`.
-- [ ] Record results in this file:
+### Harness + local x86 baseline — done
 
-  | Model | Clip | RTF (avg of 3) | First-segment latency | Peak RSS | Notes |
+- [x] Bench harness lives at `/home/tho/www/tho/ai/4-stt/bench/` (`run.py`, `clips/`, `models/`, `results/`, dedicated `.venv` with `faster-whisper 1.2.1` + `psutil`). Re-runnable on any host with one command.
+- [x] Reference clips synthesized via `3-piper` `es_MX-ald-medium`:
+  - [x] `short_es.wav` (4.62 s) — "Hola, ¿cómo estás? Quiero aprender sobre los planetas del sistema solar."
+  - [x] `medium_es.wav` (23.0 s) — Tutor paragraph about the solar system.
+  - [ ] `kid_es.wav` — real child voice, **not v1 blocker** (see RESULTS doc).
+- [x] Local x86_64 run with `cpu_threads=4`, `compute_type=int8`, `beam_size=1`, VAD on, 3 repeats. Full results: [`/home/tho/www/tho/ai/4-stt/bench/results/RESULTS-LOCAL-X86.md`](../../../bench/results/RESULTS-LOCAL-X86.md) and `bench-x86_64.json`.
+
+  | Model | Clip | RTF (avg 3) | First-segment | Peak RSS | Accuracy notes |
   |---|---|---|---|---|---|
-  | tiny-int8   | short_es  |   |   |   |   |
-  | tiny-int8   | medium_es |   |   |   |   |
-  | tiny-int8   | kid_es    |   |   |   |   |
-  | base-int8   | short_es  |   |   |   |   |
-  | base-int8   | medium_es |   |   |   |   |
-  | base-int8   | kid_es    |   |   |   |   |
-  | small-int8  | short_es  |   |   |   |   |
-  | small-int8  | medium_es |   |   |   |   |
-  | small-int8  | kid_es    |   |   |   |   |
+  | tiny-int8   | short_es  | 0.057 | 0.27 s | 263 MB | ❌ drops opening *Hola* |
+  | tiny-int8   | medium_es | 0.019 | 0.43 s | 311 MB | ❌ "Mercurio→Me curioso", "anillos→niños" |
+  | base-int8   | short_es  | 0.087 | 0.40 s | 375 MB | ❌❌ garbled: "o la como estas" |
+  | base-int8   | medium_es | 0.040 | 0.60 s | 437 MB | ❌ missing *Urano*, "Neptuno→Nectuno" |
+  | small-int8  | short_es  | 0.242 | 1.12 s | 668 MB | ✅ verbatim |
+  | small-int8  | medium_es | 0.078 | 1.80 s | 744 MB | ⚠️ best — only proper-noun slips ("Uranus"/"Neptune") |
+
+### ARM run on Hetzner VPS — pending (blocking the decision)
+
+- [ ] Copy/clone `bench/` to the Ampere VPS, `python3 -m venv .venv && .venv/bin/pip install faster-whisper psutil`.
+- [ ] Run `.venv/bin/python run.py --out results/bench-aarch64.json`. Capture stdout to `results/bench-aarch64-stdout.log`.
+- [ ] Fill table:
+
+  | Model | Clip | RTF (avg 3) | First-segment | Peak RSS |
+  |---|---|---|---|---|
+  | tiny-int8   | short_es  |   |   |   |
+  | tiny-int8   | medium_es |   |   |   |
+  | base-int8   | short_es  |   |   |   |
+  | base-int8   | medium_es |   |   |   |
+  | small-int8  | short_es  |   |   |   |
+  | small-int8  | medium_es |   |   |   |
 
 - [ ] **Decision**: default model = ________________. Reasoning: ________________.
-- [ ] Update `SPEC.md` §4.1 and `PLAN.md` §8 if the decision differs from `small-int8`.
+- [ ] Update `SPEC.md` §4.1 and `PLAN.md` §8 only if the decision differs from the provisional `small-int8`.
+
+### Provisional recommendation from local baseline
+
+**`rhasspy/faster-whisper-small-int8`** — only model with acceptable Spanish accuracy on the synthetic fixtures; throughput headroom is large enough (RTF 0.08–0.24 on x86) that even a 2× ARM penalty keeps us inside the SPEC §4.1 targets. Fallback path documented in `RESULTS-LOCAL-X86.md` (try `--cpu-threads 8` → only then `base-int8` after a real-voice WER check → only then `whisper.cpp`).
 
 ---
 
