@@ -254,20 +254,33 @@ Full runbook lives at [`DEPLOY.md`](DEPLOY.md). Punch list:
 
 ## Phase 6 — Polish & v1.x backlog (post-launch)
 
-Not gated on this checklist; promote to a real ticket as the RPi client surfaces needs.
+### API cookbook — done
 
-- [ ] `initial_prompt` injected per request from the LLM (already wired in engine; expose in handler).
-- [ ] API cookbook in `docs/context/0-api/`:
-  - [ ] `README.md` (index, mirror 3-piper's).
-  - [ ] `python_client.md` (`requests` + multipart, NDJSON consumer).
-  - [ ] `js_client.md` (browser `fetch` + `MediaRecorder`, NDJSON consumer).
-  - [ ] `rpi_recipe.md` (Pi mic capture via `sounddevice` → POST → handle response).
-  - [ ] `llm_with_voice.md` (round-trip: RPi → STT → LLM → TTS → RPi).
-  - [ ] `production_ops.md` (Coolify, CORS pinning, log levels, model upgrade path).
-- [ ] `STT_LOG_TRANSCRIPTS=true` toggle for debug DEBUG logging.
-- [ ] `/metrics` Prometheus endpoint if observability becomes a need.
-- [ ] English support (`STT_DEFAULT_LANGUAGE=en` or per-request `language`).
+Focus was set to "unblock RPi client now". Five docs delivered:
+
+- [x] `docs/context/0-api/README.md` — index, endpoint surface, curl quickstart, model choice guidance.
+- [x] `docs/context/0-api/python_client.md` — `requests` + `urllib` patterns, multipart + JSON+base64, `initial_prompt`, error mapping, reusable `SttClient` class.
+- [x] `docs/context/0-api/rpi_recipe.md` — `sounddevice` capture (push-to-talk + VAD auto-detect), model picking on the Pi, `initial_prompt` strategy with LLM feedback loop, full minimal loop.
+- [x] `docs/context/0-api/llm_with_voice.md` — 7 orchestration patterns (sequential → token-streaming + chunked TTS + face cues), end-to-end latency budget with real numbers, putting it all together.
+- [x] `docs/context/0-api/production_ops.md` — Coolify ops, CORS, logs, model upgrade path (the 4-places-in-sync rule), redeploy/rollback, troubleshooting checklist, capacity planning.
+- [x] **Skipped intentionally**: `js_client.md` — browser GUI already proves the flow; add later if a JS-standalone client appears. Reasoning recorded here so we don't re-litigate.
+- [x] Dockerfile + docker-compose.yml synced with the `medium-int8` registry entry the user added (kept four-places-in-sync rule per CLAUDE.md).
+
+### Already in v1 (no action needed)
+
+- [x] `initial_prompt` is already exposed in `/transcribe` (both multipart and JSON paths). Documented in `python_client.md` §C and `rpi_recipe.md` §"initial_prompt strategy".
+- [x] `STT_LOG_TRANSCRIPTS=true` toggle is implemented. Documented in `production_ops.md` §"Transcript logging".
+
+### Open v1.x backlog (not blocking RPi)
+
+- [ ] `js_client.md` — only if a JS-standalone client materializes outside the inlined GUI.
+- [ ] `/metrics` Prometheus endpoint, when observability stack appears.
+- [ ] English support — model already handles it via per-request `language=en`; `STT_DEFAULT_LANGUAGE=en` as the registry default needs no code change. Doc-only when needed.
 - [ ] CI: GitHub Actions workflow that builds on `linux/arm64` and runs `pytest`.
+- [ ] Worker pool for >2 concurrent clients (see `production_ops.md` §"Capacity planning").
+- [ ] `int8_float16` micro-benchmark for `tiny-int8` on the VPS.
+- [ ] whisper.cpp backend swap, only if production feel degrades.
+- [ ] Real child-voice fixture (`kid_es.wav`) to validate accuracy on actual target population.
 
 ---
 
