@@ -55,15 +55,14 @@ def _serve(config: ServiceConfig, engine):
         thread.join(timeout=5)
 
 
-def _make_config(stream_enabled: bool = True, max_body: int = 25 * 1024 * 1024 + 1024 * 1024, mode: str = "both") -> ServiceConfig:
+def _make_config(max_body: int = 25 * 1024 * 1024 + 1024 * 1024, mode: str = "both", engine_url: str = "") -> ServiceConfig:
     return ServiceConfig(
         host="127.0.0.1",
         port=0,
         mode=mode,
-        engine_url="",
+        engine_url=engine_url,
         cors_origin="*",
         max_request_body_bytes=max_body,
-        stream_enabled=stream_enabled,
         log_transcripts=False,
         models_dir=Path("models/whisper"),
     )
@@ -177,7 +176,7 @@ def test_transcribe_body_size_cap(shared_engine, short_es_wav):
     assert "error" in data
 
 
-def test_transcribe_stream_returns_not_implemented(shared_engine, short_es_wav):
+def test_transcribe_stream_route_does_not_exist(shared_engine, short_es_wav):
     config = _make_config()
     body = _multipart_body(short_es_wav.read_bytes(), "audio/wav")
     with _serve(config, shared_engine) as (host, port):
@@ -185,9 +184,9 @@ def test_transcribe_stream_returns_not_implemented(shared_engine, short_es_wav):
             f"http://{host}:{port}/transcribe/stream",
             body,
             f'multipart/form-data; boundary="{BOUNDARY}"',
-            expect_status=501,
+            expect_status=404,
         )
-    assert "Phase 3" in data["error"]
+    assert "error" in data
 
 
 def test_transcribe_corrupt_audio(shared_engine):

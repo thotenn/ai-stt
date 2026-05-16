@@ -142,29 +142,18 @@ Host: Hetzner CAX31, 8 vCPUs / 16 GB RAM, Ubuntu 24.04, aarch64. Full analysis: 
 
 ---
 
-## Phase 3 — Streaming endpoint
+## Phase 3 — Streaming endpoint — deferred to v1.x
 
-- [ ] `stt_sandbox/streaming.py` with `NdjsonWriter(wfile)` that flushes per line.
-- [ ] `SttEngine.transcribe_stream(...)` generator yielding:
-  - [ ] `{"type":"meta", "model", "language", "duration_seconds"}` first.
-  - [ ] One `{"type":"segment", "index", "start", "end", "text", "decode_seconds"}` per faster-whisper segment.
-  - [ ] `{"type":"done", "text", "rtf"}` last.
-- [ ] `api.py` route `/transcribe/stream`:
-  - [ ] 501 when `STT_STREAM_ENABLED=false`.
-  - [ ] `Content-Type: application/x-ndjson`, `X-Accel-Buffering: no`, no `Content-Length`.
-  - [ ] In-band `{"type":"error", "index", "message"}` on mid-stream failure.
-  - [ ] Pre-stream errors return HTTP 4xx/5xx before any NDJSON.
-- [ ] `/health` reports `stream_enabled`.
-- [ ] `tests/test_transcribe_stream_endpoint.py`:
-  - [ ] First line is `meta`.
-  - [ ] At least one `segment` line.
-  - [ ] Last line is `done`.
-  - [ ] `done.text == ''.join(seg.text for seg in segments).strip()`.
-  - [ ] Error-injection variant emits `error` event and the stream closes cleanly.
+**Decision (2026-05-16)**: cut from v1. Phase 0 measurements showed `first_segment_seconds == decode_seconds` for short utterances under VAD (single segment per VAD speech window), so `/transcribe/stream` provides zero perceived-latency benefit for the kid-tutor case. Implementation cost is contained (~120 LOC) and can be picked up if/when a long-form use case appears or a true streaming backend (whisper.cpp chunked, Parakeet streaming) is adopted.
 
-### Exit gate
+Cleanup completed:
 
-- [ ] `curl -N -X POST http://127.0.0.1:8000/transcribe/stream -F 'audio=@tests/fixtures/medium_es.wav'` prints lines progressively (first `segment` arrives before the equivalent `/transcribe` would have completed).
+- [x] Route removed from `api.py` (returns 404 via the generic POST fallthrough).
+- [x] `STT_STREAM_ENABLED` removed from `ServiceConfig`, `_config_from_env`, `.env.example`, SPEC §5.
+- [x] `stream_enabled` removed from `/health` response (SPEC §3.2, handler).
+- [x] SPEC §3.1 endpoints table updated; SPEC §3.5 rewritten as "deferred" with rationale link to bench results.
+- [x] SPEC §3.6 / §3.8 / §4.1 / §6 references to streaming cleaned up.
+- [x] `test_transcribe_stream_returns_not_implemented` replaced by `test_transcribe_stream_route_does_not_exist` (expects 404).
 
 ---
 

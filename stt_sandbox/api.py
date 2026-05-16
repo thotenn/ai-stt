@@ -34,7 +34,6 @@ class ServiceConfig:
         engine_url: str,
         cors_origin: str,
         max_request_body_bytes: int,
-        stream_enabled: bool,
         log_transcripts: bool,
         models_dir: Path,
     ) -> None:
@@ -49,7 +48,6 @@ class ServiceConfig:
         self.engine_url = engine_url
         self.cors_origin = cors_origin
         self.max_request_body_bytes = max_request_body_bytes
-        self.stream_enabled = stream_enabled
         self.log_transcripts = log_transcripts
         self.models_dir = models_dir
 
@@ -160,13 +158,6 @@ class SttRequestHandler(BaseHTTPRequestHandler):
             self._handle_transcribe()
             return
 
-        if path == "/transcribe/stream":
-            if not self.config.engine_enabled:
-                self._send_error_json(HTTPStatus.NOT_FOUND, "engine disabled in this mode")
-                return
-            self._send_error_json(HTTPStatus.NOT_IMPLEMENTED, "streaming endpoint lands in Phase 3")
-            return
-
         self._send_error_json(HTTPStatus.NOT_FOUND, f"no route for POST {path!r}")
 
     def _handle_health(self) -> None:
@@ -178,7 +169,6 @@ class SttRequestHandler(BaseHTTPRequestHandler):
             "mode": self.config.mode,
             "engine": self.config.engine_enabled,
             "gui": self.config.gui_enabled,
-            "stream_enabled": self.config.engine_enabled and self.config.stream_enabled,
             "model_loaded": loaded,
             "language": DEFAULT_LANGUAGE,
         }
@@ -359,7 +349,6 @@ def _config_from_env() -> ServiceConfig:
         engine_url=os.environ.get("STT_ENGINE_URL", ""),
         cors_origin=os.environ.get("STT_CORS_ORIGIN", "*"),
         max_request_body_bytes=env_int("STT_MAX_REQUEST_BODY_BYTES", 25 * 1024 * 1024 + 1024 * 1024),
-        stream_enabled=env_bool("STT_STREAM_ENABLED", True),
         log_transcripts=env_bool("STT_LOG_TRANSCRIPTS", False),
         models_dir=models_dir,
     )

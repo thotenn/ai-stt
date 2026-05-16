@@ -54,8 +54,9 @@ The RPi is the **primary** client. The browser GUI exists to validate the servic
 | `GET`  | `/health` | all | Liveness/readiness for Coolify and the GUI |
 | `GET`  | `/models` | both, engine | List installed transcription models |
 | `POST` | `/transcribe` | both, engine | Whole-utterance transcription |
-| `POST` | `/transcribe/stream` | both, engine — gated by `STT_STREAM_ENABLED` | Segment-by-segment NDJSON stream |
 | `GET`  | `/` | both, gui | Browser GUI (record mic, send, show text) |
+
+**Deferred to v1.x**: `POST /transcribe/stream` (NDJSON segment-by-segment). Phase 0 measurements showed that for utterances < 30 s with VAD on, faster-whisper emits a single segment per VAD-bounded speech window, so first-segment latency equals total decode time and streaming provides no perceived-latency benefit for the kid-tutor case. The endpoint is documented in §3.5 as deferred until a long-form use case appears or a true streaming backend (e.g. whisper.cpp `--no-fallback` chunked, Parakeet streaming) is adopted.
 
 ### 3.2 `GET /health`
 
@@ -67,13 +68,10 @@ Response:
   "mode": "both",
   "engine": true,
   "gui": true,
-  "stream_enabled": true,
   "model_loaded": "rhasspy/faster-whisper-small-int8",
   "language": "es"
 }
 ```
-
-`stream_enabled` is `true` only when the engine is active *and* `STT_STREAM_ENABLED=true`. Browser GUI reads this on load to decide whether to call `/transcribe` or `/transcribe/stream`. Mirrors `3-piper`'s `chunks_enabled` field.
 
 ### 3.3 `GET /models`
 
@@ -130,37 +128,24 @@ Accepted MIME types: `audio/wav`, `audio/x-wav`, `audio/webm`, `audio/ogg`, `aud
 
 **Response 500** — decoder failure. Body: `{error: string}`.
 
-### 3.5 `POST /transcribe/stream`
+### 3.5 `POST /transcribe/stream` — deferred to v1.x
 
-Same request schema as `/transcribe`. Returns `501 Not Implemented` if `STT_STREAM_ENABLED=false`.
+**Not implemented in v1.** The route returns HTTP `404` (no route registered) so that mistaken calls fail loudly rather than appearing to succeed.
 
-**Latency caveat**: with VAD on, faster-whisper emits one segment per VAD-bounded speech window. Typical kid-tutor utterances (5–10 s, mostly continuous speech) come back as a single segment, so first-segment latency equals total decode time and streaming provides **no perceived-latency benefit** vs. `/transcribe` in that regime. The endpoint exists for symmetry with `3-piper`'s `/speak/chunks` and pays off only on long-form input (≥ 30 s with natural pauses). Phase 0 measurements confirmed this on the Ampere VPS — see SPEC §4.1 and [`bench/results/arm64/RESULTS.md`](../../../bench/results/arm64/RESULTS.md).
+Original design (preserved here for reference): NDJSON stream with `meta` → many `segment` → `done` events, mirroring `3-piper`'s `/speak/chunks`. Reason it was cut:
 
-**Response 200** — `application/x-ndjson`, headers include `X-Accel-Buffering: no` (mirrors `/speak/chunks` in `3-piper`). One JSON object per line, flushed immediately:
+Phase 0 measurements on the Ampere VPS showed that with VAD on, faster-whisper emits one segment per VAD-bounded speech window. Typical kid-tutor utterances (5–10 s, mostly continuous speech) come back as a single segment, so `first_segment_seconds == decode_seconds` and the streaming endpoint provides **no perceived-latency benefit** vs. `/transcribe` in that regime. See [`../../../bench/results/arm64/RESULTS.md`](../../../bench/results/arm64/RESULTS.md).
 
-```text
-{"type":"meta","model":"...","language":"es","duration_seconds":3.47}
-{"type":"segment","index":0,"start":0.0,"end":1.62,"text":"hola, quiero aprender","decode_seconds":0.41}
-{"type":"segment","index":1,"start":1.62,"end":3.47,"text":" sobre los planetas","decode_seconds":0.38}
-{"type":"done","text":"hola, quiero aprender sobre los planetas","rtf":0.23}
-```
-
-Mid-stream failure emits an in-band event and closes:
-
-```text
-{"type":"error","index":1,"message":"..."}
-```
-
-Pre-stream failures return HTTP 4xx/5xx before any NDJSON is written.
+Promote to v1.x only when a long-form use case appears (≥ 30 s with natural pauses) or a true streaming backend (whisper.cpp chunked, Parakeet streaming) is adopted. The implementation cost is contained: `streaming.py` (NDJSON writer) + `engine.transcribe_stream()` generator + a route handler ≈ 120 LOC.
 
 ### 3.6 `GET /` — Browser GUI
 
 Single inlined HTML page (same pattern as `3-piper`'s `INDEX_HTML`). Features:
 
 - Mic permission prompt + start/stop recording button (uses `MediaRecorder`, `audio/webm;codecs=opus`).
-- Visual recording indicator (timer + level meter, level meter is optional in v1).
-- After stop: posts the recorded blob to `/transcribe` (or `/transcribe/stream` when `stream_enabled`).
-- Displays the transcript progressively (streaming mode) or all at once (non-streaming).
+- Visual recording indicator (elapsed timer).
+- After stop: posts the recorded blob to `/transcribe`.
+- Displays the transcript once decoding finishes.
 - Model selector populated from `/models`.
 - Optional playback `<audio>` element of the recorded clip for sanity checking what the server received.
 - Status text equivalent to 3-piper's `status` element: `Listo` / `Grabando 0:03` / `Transcribiendo...` / `Listo`.
@@ -179,7 +164,7 @@ GUI is **for developer testing only**. No analytics, no auth, no storage.
 
 | Mode | What's exposed |
 |---|---|
-| `both`   | GUI at `/`, engine endpoints (`/health`, `/models`, `/transcribe`, `/transcribe/stream`) |
+| `both`   | GUI at `/`, engine endpoints (`/health`, `/models`, `/transcribe`) |
 | `engine` | Engine endpoints only, `/` returns 404 |
 | `gui`    | `/` and `/health` only; GUI calls remote engine via `STT_ENGINE_URL` |
 
@@ -197,7 +182,7 @@ Calibrated against Phase 0 measurements on the Hetzner CAX31-class Ampere VPS at
 
 - **RTF — 5 s utterance**: < 0.70 (decode in under 3.5 s). Measured floor 0.657.
 - **RTF — 30 s utterance**: < 0.50 (decode in under 15 s). Measured floor 0.217.
-- **First segment latency** ≈ total decode for utterances < 30 s (faster-whisper + VAD emits one segment per VAD-bounded speech window, and short utterances are typically a single window). `/transcribe/stream` provides no perceived-latency win in this regime — it is built for symmetry with 3-piper and pays off only on long-form input with natural pauses. See SPEC §3.5.
+- **First segment latency** ≈ total decode for utterances < 30 s (faster-whisper + VAD emits one segment per VAD-bounded speech window, and short utterances are typically a single window). This is why `/transcribe/stream` was cut from v1 — see SPEC §3.5.
 - **Cold start** (model not yet loaded): < 60 s including HuggingFace download (~250 MB) on first request, < 5 s on subsequent restarts (model on disk).
 - **Peak RSS**: < 1.0 GB with `small-int8` resident. Measured 706 MB.
 
@@ -272,7 +257,6 @@ STT_VAD_THRESHOLD=0.5
 STT_VAD_MIN_SPEECH_MS=250
 STT_VAD_MIN_SILENCE_MS=2000
 
-STT_STREAM_ENABLED=true
 STT_MAX_REQUEST_BODY_BYTES=26214400
 
 STT_LOG_TRANSCRIPTS=false
@@ -290,7 +274,7 @@ Notes:
 ## 6. Deliverables
 
 - Working Docker image deployed to Coolify at `https://ai-stt.thotenn.com`.
-- `/transcribe` and `/transcribe/stream` callable from a Python `requests` client and from a browser.
+- `/transcribe` callable from a Python `requests` client and from a browser.
 - Browser GUI usable from any laptop with a mic.
 - Test suite covering: model registry parsing, audio decode path, `/transcribe` happy path, `/transcribe/stream` event order, GUI HTML render.
 - API cookbook under `docs/context/0-api/` (Python client, JS/browser client, RPi-specific recipe), to be authored after v1 ships — **not** part of v1 scope.
