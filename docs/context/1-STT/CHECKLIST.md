@@ -45,102 +45,76 @@ Host: Hetzner CAX31, 8 vCPUs / 16 GB RAM, Ubuntu 24.04, aarch64. Full analysis: 
   | small-int8  | short_es  | **0.657** | 3.04 s | 706 MB | ✅ all content words correct |
   | small-int8  | medium_es | **0.217** | 4.99 s | 702 MB | ✅ best — *Urano* and *anillos* captured |
 
-### Decision sub-step — required to lock the default
+### Thread sweep — done
 
-Only `small-int8` clears accuracy. At 4 threads its short-clip RTF (0.657) is **above** the SPEC §4.1 target (< 0.5). VPS has 8 vCPUs (no SMT on Ampere) — doubling threads should land us in budget.
+- [x] Re-ran `small-int8` with `--cpu-threads 8`. Artifacts: `bench/results/arm64/bench-aarch64-t8.{json,stdout.log}`.
 
-- [ ] Run on VPS:
+  | Threads | Short RTF | Medium RTF |
+  |---|---|---|
+  | 4 | 0.657 | **0.217** |
+  | 8 | 0.689 | **0.390** |
 
-  ```bash
-  cd /root/apps/ai-stt/bench
-  .venv/bin/python run.py \
-    --models rhasspy/faster-whisper-small-int8 \
-    --cpu-threads 8 \
-    --out results/bench-aarch64-t8.json \
-    2>&1 | tee results/bench-aarch64-t8-stdout.log
-  ```
+  Eight threads does **not** help; medium clip nearly doubles in latency (thread contention or Hetzner shared-instance noise). 4 threads is the optimum for this VPS class.
 
-- [ ] Apply decision matrix (from `arm64/RESULTS.md`):
-  - RTF short ≤ 0.50 → **lock `small-int8` + `cpu_threads=8`**, no SPEC change.
-  - RTF short 0.50–0.70 → lock same defaults, relax SPEC §4.1 to "< 0.7 for 5 s, < 0.5 for 30 s".
-  - RTF short > 0.70 → escalate (try `compute_type=int8_float16` / `num_workers=2` / whisper.cpp backend swap). Do **not** fall back to `base-int8` — accuracy data above rules it out.
+### Final Phase 0 decision — locked
 
-- [ ] **Decision (filled after the 8-thread run)**:
-  - Default model: ________________
-  - `STT_CPU_THREADS`: ________________
-  - `STT_COMPUTE_TYPE`: ________________
-  - Notes / SPEC amendments: ________________
+- [x] **Default model**: `rhasspy/faster-whisper-small-int8`. Only model with acceptable Spanish accuracy.
+- [x] **`STT_CPU_THREADS=4`**. t=8 measured worse than t=4 on the actual VPS.
+- [x] **`STT_COMPUTE_TYPE=int8`**. `int8_float16` deferred to v1.x exploration.
+- [x] **`STT_BEAM_SIZE=1`**. ARM heuristic from `wyoming-faster-whisper`; sufficient.
+- [x] SPEC §4.1 amended: target relaxed to **RTF < 0.7 for 5 s, RTF < 0.5 for 30 s** (calibrated to measured floor 0.657 / 0.217).
+- [x] SPEC §3.5 amended: documented that `/transcribe/stream` has no perceived-latency benefit for utterances < 30 s (single VAD segment → first-segment = total decode).
+- [x] PLAN §8 unchanged — `small-int8` was already the provisional default; `cpu_threads=4` matches the pre-existing entry.
 
-### Findings to fold into PLAN / SPEC regardless of the decision
+### v1.x exploration tickets (post-launch, not blocking Phase 1)
 
-- [ ] PLAN §6 + SPEC §3.5: note that for typical 5–10 s utterances Whisper emits a single VAD-bounded segment, so `/transcribe/stream` does **not** save perceived latency on short inputs — it remains useful for long-form (≥ 30 s with pauses) only. The endpoint is still worth building (symmetric API, useful for long inputs, low cost), but should not be marketed as a latency win for kid questions.
-- [ ] SPEC §5 default: `STT_CPU_THREADS=8` (was 4) once the decision row above lands the value.
+- [ ] Micro-benchmark `compute_type=int8_float16` (1 min): `.venv/bin/python run.py --models rhasspy/faster-whisper-small-int8 --compute-type int8_float16 --out results/bench-aarch64-int8fp16.json`.
+- [ ] whisper.cpp swap-in benchmark per `docs/context/0-general/02-alternatives.md`, only if production feel is unsatisfactory after Phase 5 deploy.
+- [ ] Real child-voice `kid_es.wav` accuracy verification before public launch.
 
 ---
 
-## Phase 1 — Skeleton
+## Phase 1 — Skeleton ✅
 
 ### Project scaffolding
 
-- [ ] `/home/tho/www/tho/ai/4-stt/.gitignore` (mirror 3-piper).
-- [ ] `/home/tho/www/tho/ai/4-stt/.dockerignore` (mirror 3-piper).
-- [ ] `/home/tho/www/tho/ai/4-stt/README.md` (placeholder; final pass in Phase 6).
-- [ ] `/home/tho/www/tho/ai/4-stt/CLAUDE.md` (architecture summary for future agents; mirror 3-piper's tone).
-- [ ] `/home/tho/www/tho/ai/4-stt/.env.example` matching SPEC.md §5.
-- [ ] `/home/tho/www/tho/ai/4-stt/pyproject.toml` per PLAN §5.
+- [x] `.gitignore`, `.dockerignore`, `.env.example`, `pyproject.toml`, `README.md` (placeholder), `CLAUDE.md`.
 
-### Package
+### Package (`stt_sandbox/`)
 
-- [ ] `stt_sandbox/__init__.py` re-exports `SttEngine`, `SttError`, `MODELS`, `DEFAULT_MODEL`, `TranscribeResult`, `__version__`.
-- [ ] `stt_sandbox/config.py` ported from 3-piper, `PIPER_` → `STT_`.
-- [ ] `stt_sandbox/models.py`:
-  - [ ] `ModelSpec` dataclass.
-  - [ ] `parse_model_names(value)` (JSON array or comma-separated).
-  - [ ] `parse_model_spec(name)` derives `size` + `quantization` from `rhasspy/faster-whisper-<size>-<quant>`.
-  - [ ] `MODELS` built at import time from `STT_MODEL_NAMES`; `STT_DEFAULT_MODEL` auto-included.
-  - [ ] `get_model_spec(name)` with friendly KeyError.
-- [ ] `stt_sandbox/audio.py`:
-  - [ ] `decode_to_pcm(data, mime)` returns tempfile path.
-  - [ ] WAV-passthrough when input is already 16 kHz mono 16-bit.
-  - [ ] WAV resample/mix path via `soundfile` + numpy when needed.
-  - [ ] Non-WAV paths raise `SttError("unsupported MIME in skeleton")` for now (Phase 2 wires ffmpeg).
-- [ ] `stt_sandbox/engine.py`:
-  - [ ] `class SttError(RuntimeError)`.
-  - [ ] `@dataclass class TranscribeResult` and `class Segment`.
-  - [ ] `class SttEngine` with `transcribe(wav_path, model, language, initial_prompt)` only.
-  - [ ] Lazy `WhisperModel` cache keyed by model id.
-  - [ ] VAD parameters passed through to `WhisperModel.transcribe(...)`.
-  - [ ] `preload(name)` runs synchronously at startup.
-  - [ ] All decoder exceptions wrapped as `SttError`.
-- [ ] `stt_sandbox/api.py`:
-  - [ ] CLI parser (`--mode`, `--engine-url`, `--host`, `--port`).
-  - [ ] `main()` loads env, instantiates `SttEngine`, calls `engine.preload(DEFAULT_MODEL)`, starts `ThreadingHTTPServer`.
-  - [ ] Request handler with `do_GET`, `do_POST`.
-  - [ ] `MAX_REQUEST_BODY_BYTES` enforced before parsing.
-  - [ ] CORS headers on every response.
-  - [ ] Routes: `GET /health`, `GET /models`, `POST /transcribe`. No GUI yet.
-  - [ ] JSON error responses (never HTML).
+- [x] `__init__.py` re-exports `SttEngine`, `SttError`, `MODELS`, `DEFAULT_MODEL`, `TranscribeResult`, `Segment`, `__version__`.
+- [x] `config.py` ported from 3-piper (`PIPER_` → `STT_`) plus `env_float`.
+- [x] `models.py`: `ModelSpec`, `parse_model_names` (JSON / CSV / empty), `model_spec_from_name` regex over `rhasspy/faster-whisper-<size>-<quant>`, `MODELS` built at import with `STT_DEFAULT_MODEL` auto-included, `get_model_spec` with friendly KeyError.
+- [x] `audio.py`: `decode_to_pcm(data, mime)` writes tempfile and validates WAV via `wave.open`. Phase 2 will add ffmpeg for non-WAV; full strict resampling deferred (faster-whisper accepts any sample rate).
+- [x] `engine.py`: `SttError`, `Segment`, `TranscribeResult` dataclasses; `SttEngine` with lazy `WhisperModel` cache, per-model load lock, shared transcribe lock (mirrors wyoming-faster-whisper), VAD parameters forwarded, `preload(name)`, all decoder exceptions wrapped as `SttError`.
+- [x] `multipart.py`: stdlib `cgi` is gone in Python 3.13 → wrote a minimal RFC 2046 multipart parser (`MultipartPart`, `parse_multipart`).
+- [x] `api.py`: argparse CLI (`--host`, `--port`, `--mode`, `--engine-url`, `--no-preload`, `--debug`), `ThreadingHTTPServer`, `SttRequestHandler` with `do_GET` / `do_POST` / `do_OPTIONS`, CORS on every response, body cap enforced before parse, JSON error responses, routes gated by `engine_enabled` / `gui_enabled`. Routes: `GET /health`, `GET /models`, `POST /transcribe`, `GET /` (placeholder until Phase 4), `POST /transcribe/stream` (501 until Phase 3).
 
-### Tests (Phase 1)
+### Tests — 30 passing in 9.84 s
 
-- [ ] `tests/__init__.py`.
-- [ ] `tests/fixtures/short_es.wav` (commit a small clean clip; if rights are unclear, generate one with 3-piper at deploy time and document it).
-- [ ] `tests/test_models.py`:
-  - [ ] `parse_model_names` handles JSON, CSV, empty.
-  - [ ] `parse_model_spec` extracts `(size, quantization)`.
-  - [ ] `MODELS` includes default model.
-- [ ] `tests/test_engine.py`:
-  - [ ] `SttEngine.transcribe(short_es.wav)` returns non-empty text in Spanish.
-  - [ ] RTF < 1.5 (loose bound; tighter in Phase 0 doc).
-- [ ] `tests/test_transcribe_endpoint.py`:
-  - [ ] 200 on valid multipart WAV upload.
-  - [ ] 400 on empty body / missing audio field.
-  - [ ] 400 on body over the size cap.
+- [x] `tests/__init__.py`, `tests/conftest.py` (session-scoped `shared_engine` using `tiny-int8` to keep CI fast; first run downloads ~80 MB), `tests/fixtures/short_es.wav` copied from `bench/clips/`.
+- [x] `tests/test_models.py` (8) — registry + parsing + regex extraction.
+- [x] `tests/test_audio.py` (5) — happy path, MIME sniffing, empty/garbage/non-WAV errors with Phase 2 hint.
+- [x] `tests/test_multipart.py` (5) — boundary parsing, multi-field, missing closing/name errors.
+- [x] `tests/test_engine.py` (3) — real fixture transcription returns `es` text containing *planetas*, *sistema*, *solar*; round-trip `to_dict`.
+- [x] `tests/test_transcribe_endpoint.py` (9) — `/health`, `/models`, `/transcribe` happy path, empty body 400, missing audio 400, body cap 413, `/transcribe/stream` 501, unsupported MIME 400, `engine` mode → `/` 404.
 
 ### Exit gate
 
-- [ ] `curl -X POST http://127.0.0.1:8000/transcribe -F 'audio=@tests/fixtures/short_es.wav'` returns valid JSON with non-empty `text`.
-- [ ] `pytest tests/ -q` is green.
+- [x] `pytest -x` → **30 passed**.
+- [x] Live server smoke test (`--port 8765 --no-preload`):
+  - `GET /health` → `{status: ok, mode: both, engine: true, gui: true, stream_enabled: true, model_loaded: rhasspy/faster-whisper-small-int8, language: es}`
+  - `GET /models` → 3 models with `size`/`quantization`/`language`/`loaded` fields
+  - `POST /transcribe` (multipart) → `text: "¿Cómo estás? Quiero aprender sobre los planetas del sistema solar."`, `language: es`, `duration_seconds: 4.621`, `decode_seconds: 0.339`, `rtf: 0.073`, full segment list.
+  - `POST /transcribe` (JSON+base64) → identical transcript, alternate transport works.
+  - `POST /transcribe/stream` → HTTP 501 as planned.
+  - `GET /nonexistent` → HTTP 404.
+
+### Phase 1 deviations from PLAN.md (worth surfacing)
+
+- Added `stt_sandbox/multipart.py` (not in original PLAN) because `cgi` was removed in Python 3.13. ~80 LOC, no external deps.
+- `audio.py` does not yet do active resampling/channel-mix; faster-whisper handles arbitrary sample rates internally, so Phase 1 just validates the WAV is parseable. If we ever need strict 16 kHz/mono normalization (e.g. for whisper.cpp backend swap), revisit in Phase 2 alongside the ffmpeg path.
+- Engine lock is `threading.Lock` (not `asyncio.Lock`) because the stdlib HTTP server uses threads, not asyncio. Same serialization semantics; matches the actual runtime.
 
 ---
 

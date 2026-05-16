@@ -1,0 +1,24 @@
+[project]
+name = "stt-sandbox"
+version = "0.1.0"
+description = "Small Python library, API, and GUI for testing faster-whisper STT."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "faster-whisper>=1.2.1,<2",
+  "soundfile>=0.12",
+  "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+
+[project.scripts]
+stt-sandbox-api = "stt_sandbox.api:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
