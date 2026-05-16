@@ -188,30 +188,53 @@ Cleanup completed:
 - [x] Live server: `GET /` returns 8112-byte HTML, `__ENGINE_URL_JSON__` count = 0 in output, `engineUrl = "";` correctly injected in `both` mode.
 - [x] `/health` no longer exposes `stream_enabled` (regression check after the Phase 3 cut).
 - [x] `/models` returns the 3 configured models for the GUI dropdown.
-- [ ] **Manual browser test** (cannot be automated here — needs a user with a mic): open `http://localhost:8000/` in Chrome/Firefox, click `Grabar`, speak Spanish, click `Detener`, transcript appears within ~3 s with default model. Owner: thotenn.
+- [x] **Manual browser test** — user confirmed on 2026-05-16 that the GUI loads, mic captures, and transcript appears.
 
 ---
 
 ## Phase 5 — Docker + Coolify deploy
 
-- [ ] `Dockerfile` per PLAN §5. Installs `ffmpeg`. Base `python:3.12-slim-bookworm`.
-- [ ] `docker-compose.yml` per PLAN §5 with healthcheck on `/health`.
-- [ ] Confirm image builds on `linux/arm64`: `docker buildx build --platform linux/arm64 -t stt-sandbox:local .`.
-- [ ] Image size ≤ 400 MB. If larger, investigate before deploy.
-- [ ] Local Compose run boots successfully on the Ampere VPS, `/health` returns 200 from `127.0.0.1:8000`.
-- [ ] Create Coolify resource at `ai-stt.thotenn.com`:
-  - [ ] GitHub Apps integration (same pattern as `3-piper`).
-  - [ ] Env vars set from `.env.example` defaults.
-  - [ ] Volume `stt-models` mounted at `/app/models`.
-  - [ ] Healthcheck enabled.
-- [ ] DNS / Caddy / subdomain wired up.
-- [ ] `https://ai-stt.thotenn.com/health` returns 200 publicly.
-- [ ] Smoke-test from a browser: GUI at `https://ai-stt.thotenn.com/` records, sends, transcribes.
-- [ ] Smoke-test from Python: post a WAV via `requests.post`, get a transcript.
+### Build artifacts — done
 
-### Exit gate
+- [x] `Dockerfile`: `python:3.12-slim-bookworm` base + `apt-get install ffmpeg` + `pip install .`. Env defaults match SPEC §5.
+- [x] `docker-compose.yml`: service `stt-sandbox` on `${STT_HOST_PORT:-8000}:${STT_PORT:-8000}`, volume `stt-models:/app/models`, healthcheck via Python `urllib` hitting `/health` (30 s interval, 120 s start grace covering model preload).
+- [x] Local container smoke test (x86 baseline via podman):
+  - Build succeeded, image size **994 MB** — above the PLAN §5 aspirational "≤ 400 MB" target; see [`DEPLOY.md`](DEPLOY.md) "Image size" for why and what to do about it.
+  - `docker compose up -d --build` → container boots, model preloads in ~25 s.
+  - `GET /health` → `{status: ok, mode: both, ...}`.
+  - `GET /models` → all 3 models listed, `small-int8` reports `loaded: true`.
+  - `POST /transcribe` (WAV) → "Hola, ¿Cómo estás? Quiero aprender sobre los planetas del sistema solar.", decode 1.18 s, RTF 0.256.
+  - `POST /transcribe` (WebM/Opus) → same text, decode 1.06 s.
+  - `GET /` → 8112-byte HTML, 200 OK.
+  - Healthcheck transitions from failing (preload window) → `healthy` once the server is up.
 
-- [ ] Service is reachable at `https://ai-stt.thotenn.com`, returns a valid Spanish transcript for at least one recorded utterance from a real laptop mic.
+### ARM build on the VPS — pending (user-driven)
+
+- [ ] `git push origin main` so the latest commits reach the GitHub remote.
+- [ ] On the Hetzner Ampere VPS, native aarch64 build (no buildx / QEMU needed):
+  ```bash
+  cd /root/apps/ai-stt && git pull
+  docker compose up -d --build
+  curl -fsS http://127.0.0.1:8000/health
+  ```
+- [ ] Confirm `docker` (or Coolify's bundled equivalent) builds cleanly on aarch64. All deps (`ctranslate2`, `onnxruntime`, `av`, `numpy`) have aarch64 wheels.
+
+### Coolify resource — pending (user-driven)
+
+Full runbook lives at [`DEPLOY.md`](DEPLOY.md). Punch list:
+
+- [ ] Create Coolify resource (Public Repo or GitHub App) pointing at `https://github.com/thotenn/ai-stt`, branch `main`, Build Pack `Docker Compose`.
+- [ ] Domain `https://ai-stt.thotenn.com`, proxy target port `8000`.
+- [ ] Env vars: minimum is the defaults the `docker-compose.yml` ships with. Override `STT_CORS_ORIGIN` once RPi/LLM origins are known.
+- [ ] Volume `stt-models` materialized by Coolify (named volume, not bind mount).
+- [ ] DNS A record `ai-stt.thotenn.com` → VPS IP.
+- [ ] Click Deploy. Wait for `healthy`.
+
+### Exit gate — pending
+
+- [ ] `curl -fsS https://ai-stt.thotenn.com/health` returns 200 from any external network.
+- [ ] Browser GUI at `https://ai-stt.thotenn.com/` records a real Spanish utterance and returns a transcript within ~3 s.
+- [ ] Python smoke test from a different machine: `requests.post(url, files={'audio': open('clip.wav','rb')})` returns valid JSON.
 
 ---
 

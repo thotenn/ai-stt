@@ -1,0 +1,39 @@
+services:
+  stt-sandbox:
+    build:
+      context: .
+    container_name: ${STT_CONTAINER_NAME:-stt-sandbox}
+    restart: unless-stopped
+    environment:
+      STT_HOST: 0.0.0.0
+      STT_PORT: ${STT_PORT:-8000}
+      STT_SERVICE_MODE: ${STT_SERVICE_MODE:-both}
+      STT_ENGINE_URL: ${STT_ENGINE_URL:-}
+      STT_CORS_ORIGIN: ${STT_CORS_ORIGIN:-*}
+      STT_MODELS_DIR: /app/models/whisper
+      STT_DEFAULT_MODEL: ${STT_DEFAULT_MODEL:-rhasspy/faster-whisper-small-int8}
+      STT_MODEL_NAMES: ${STT_MODEL_NAMES:-["rhasspy/faster-whisper-small-int8","rhasspy/faster-whisper-base-int8","rhasspy/faster-whisper-tiny-int8"]}
+      STT_DEFAULT_LANGUAGE: ${STT_DEFAULT_LANGUAGE:-es}
+      STT_COMPUTE_TYPE: ${STT_COMPUTE_TYPE:-int8}
+      STT_CPU_THREADS: ${STT_CPU_THREADS:-4}
+      STT_BEAM_SIZE: ${STT_BEAM_SIZE:-1}
+      STT_INITIAL_PROMPT: ${STT_INITIAL_PROMPT:-}
+      STT_VAD_ENABLED: ${STT_VAD_ENABLED:-true}
+      STT_VAD_THRESHOLD: ${STT_VAD_THRESHOLD:-0.5}
+      STT_VAD_MIN_SPEECH_MS: ${STT_VAD_MIN_SPEECH_MS:-250}
+      STT_VAD_MIN_SILENCE_MS: ${STT_VAD_MIN_SILENCE_MS:-2000}
+      STT_MAX_REQUEST_BODY_BYTES: ${STT_MAX_REQUEST_BODY_BYTES:-26214400}
+      STT_LOG_TRANSCRIPTS: ${STT_LOG_TRANSCRIPTS:-false}
+    ports:
+      - "${STT_HOST_PORT:-8000}:${STT_PORT:-8000}"
+    volumes:
+      - stt-models:/app/models
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:$$STT_PORT/health', timeout=5).read()\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+volumes:
+  stt-models:

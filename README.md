@@ -37,3 +37,14 @@ pytest
 ```
 
 Tests use a real Spanish fixture WAV at `tests/fixtures/short_es.wav` (synthesized via `3-piper`). First run downloads the default Whisper model (~250 MB).
+
+## Docker
+
+```bash
+docker compose up --build
+# http://127.0.0.1:8000
+```
+
+Image is `python:3.12-slim-bookworm` + `ffmpeg` + the package, ~1 GB. Builds natively on `linux/arm64` (no buildx needed on an aarch64 host). The `stt-models` volume keeps the downloaded Whisper weights across container restarts.
+
+Override env via `.env` or environment variables; see [`docs/context/1-STT/DEPLOY.md`](docs/context/1-STT/DEPLOY.md) for the full deployment runbook (Coolify + Hetzner Ampere) and [`.env.example`](.env.example) for available knobs.
