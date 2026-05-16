@@ -157,28 +157,38 @@ Cleanup completed:
 
 ---
 
-## Phase 4 — Browser GUI
+## Phase 4 — Browser GUI ✅
 
-- [ ] `INDEX_HTML` constant added to `api.py`. Spanish UI strings only.
-- [ ] Route `GET /` serves the GUI, replaces `__ENGINE_URL_JSON__` with a JSON+`<`-escaped literal.
-- [ ] Gated by `gui_enabled`; returns 404 in `engine` mode.
-- [ ] GUI features:
-  - [ ] Model `<select>` populated from `GET /models` with default preselected.
-  - [ ] `getUserMedia({audio: {channelCount:1, sampleRate:16000}})`.
-  - [ ] `MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' })`. Fallback to `audio/mp4` for Safari.
-  - [ ] Record/stop button with timer.
-  - [ ] On stop, POST blob to `/transcribe/stream` when `stream_enabled`, else `/transcribe`.
-  - [ ] Render transcript progressively in streaming mode (append per `segment` event).
-  - [ ] `<audio controls>` plays back the just-sent blob.
-  - [ ] Status line: `Listo` / `Grabando 0:03` / `Transcribiendo...` / `Listo` / `Error: ...`.
-- [ ] CLI flags `--mode gui --engine-url URL` route the GUI to a remote engine.
-- [ ] `tests/test_gui_html.py`:
-  - [ ] HTML renders without unresolved `__ENGINE_URL_JSON__`.
-  - [ ] Injecting `STT_ENGINE_URL='</script><script>alert(1)</script>'` does not produce an executable `<script>` in the output.
+- [x] `INDEX_HTML` lives in its own module `stt_sandbox/gui_html.py` (kept out of `api.py` for readability). `render_index(engine_url)` substitutes `__ENGINE_URL_JSON__` with a JSON literal where `<`, `>`, `&` are unicode-escaped — `</script>` injection cannot break out.
+- [x] Route `GET /` serves the GUI in `both` and `gui` modes; 404 in `engine` mode.
+- [x] GUI features delivered:
+  - Model `<select>` populated from `GET /models` with default preselected.
+  - `getUserMedia({audio: {channelCount:1, sampleRate:16000, echoCancellation, noiseSuppression}})`.
+  - `MediaRecorder` MIME fallback chain: `audio/webm;codecs=opus` → `audio/webm` → `audio/ogg;codecs=opus` → `audio/mp4` (Safari).
+  - Single record/stop toggle button + visual recording state (red background).
+  - Live timer (`Grabando 0:03`) updating every 250 ms.
+  - On stop: `POST /transcribe` (multipart, `audio` + `model`).
+  - Transcript rendered into a styled panel + meta row showing `idioma / duración / decode / rtf / modelo`.
+  - `<audio controls>` plays back the just-sent blob.
+  - Status line: `Listo` / `Grabando 0:03` / `Transcribiendo...` / `Listo` / `Error`.
+  - Keyboard shortcut: `Space` toggles record (when focus is on body).
+- [x] CLI flags `--mode gui --engine-url URL` route the GUI to a remote engine. Validated in `test_gui_mode_serves_root_and_health_only`.
+- [x] `tests/test_gui_html.py` (9):
+  - HTML renders without unresolved token.
+  - Empty engine URL renders as `""`.
+  - `</script><script>alert(...)</script>` injection unicode-escaped (verified literal not present in output, `<` is).
+  - Ampersand + angle bracket escaped.
+  - Token marker present in source template.
+  - `/` returns HTML in `both`; 404 in `engine`; HTML in `gui` with the remote URL embedded.
+  - `ServiceConfig(mode='gui', engine_url='')` raises `ValueError`.
 
 ### Exit gate
 
-- [ ] Open `http://127.0.0.1:8000/` in Chrome on a laptop with a mic. Click Grabar, speak Spanish, click Detener, see a transcript appear within a few seconds.
+- [x] `pytest -x` → **48 passed in 10.49 s**.
+- [x] Live server: `GET /` returns 8112-byte HTML, `__ENGINE_URL_JSON__` count = 0 in output, `engineUrl = "";` correctly injected in `both` mode.
+- [x] `/health` no longer exposes `stream_enabled` (regression check after the Phase 3 cut).
+- [x] `/models` returns the 3 configured models for the GUI dropdown.
+- [ ] **Manual browser test** (cannot be automated here — needs a user with a mic): open `http://localhost:8000/` in Chrome/Firefox, click `Grabar`, speak Spanish, click `Detener`, transcript appears within ~3 s with default model. Owner: thotenn.
 
 ---
 

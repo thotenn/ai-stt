@@ -16,6 +16,7 @@ from urllib.parse import urlparse
 from .audio import AudioDecodeError, SUPPORTED_MIME_TYPES, decode_to_pcm
 from .config import env_bool, env_float, env_int, load_env
 from .engine import SttEngine, SttError
+from .gui_html import render_index
 from .models import DEFAULT_LANGUAGE, DEFAULT_MODEL, MODELS
 from .multipart import MultipartError, parse_multipart
 
@@ -143,7 +144,8 @@ class SttRequestHandler(BaseHTTPRequestHandler):
             if not self.config.gui_enabled:
                 self._send_error_json(HTTPStatus.NOT_FOUND, "gui disabled in this mode")
                 return
-            self._send_text(HTTPStatus.OK, "<!doctype html><title>stt-sandbox</title><p>GUI lands in Phase 4.</p>", "text/html; charset=utf-8")
+            html = render_index(self.config.engine_url)
+            self._send_text(HTTPStatus.OK, html, "text/html; charset=utf-8")
             return
 
         self._send_error_json(HTTPStatus.NOT_FOUND, f"no route for GET {path!r}")
